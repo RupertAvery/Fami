@@ -46,6 +46,8 @@
         public int Z { get; set; }
         public int C { get; set; }
         public int EffectiveAddr { get; set; }
+        public bool PageBoundsCrossed { get; set; }
+        public bool Branched { get; set; }
 
         public sbyte rel;
         public int arg;

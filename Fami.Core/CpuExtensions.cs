@@ -51,6 +51,15 @@ namespace Fami.Core
         public static int ReadAbsoluteX(this Cpu6502State cpu)
         {
             cpu.EffectiveAddr = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC + 2) * 0x100 + cpu.X;
+
+            var x = cpu.PC >> 8;
+            var y = cpu.EffectiveAddr >> 8;
+
+            if (x != y)
+            {
+                cpu.PageBoundsCrossed = true;
+            }
+
             return cpu.Memory.Read(cpu.EffectiveAddr);
         }
 
@@ -58,6 +67,16 @@ namespace Fami.Core
         public static int ReadAbsoluteY(this Cpu6502State cpu)
         {
             cpu.EffectiveAddr = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC + 2) * 0x100 + cpu.Y;
+
+            var x = cpu.PC >> 8;
+            var y = cpu.EffectiveAddr >> 8;
+
+            if (x != y)
+            {
+                cpu.PageBoundsCrossed = true;
+            }
+
+
             return cpu.Memory.Read(cpu.EffectiveAddr);
         }
 
@@ -93,6 +112,15 @@ namespace Fami.Core
             var arg = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC +2) * 0x100;
             var iy = arg;
             cpu.EffectiveAddr = cpu.Memory.Read(iy) + cpu.Memory.Read((iy + 1) % 0x100) * 0x100 + cpu.Y;
+
+            var x = cpu.PC >> 8;
+            var y = cpu.EffectiveAddr >> 8;
+
+            if (x != y)
+            {
+                cpu.PageBoundsCrossed = true;
+            }
+
             return cpu.Memory.Read(cpu.EffectiveAddr);
         }
 

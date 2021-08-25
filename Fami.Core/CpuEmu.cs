@@ -77,6 +77,13 @@ namespace Fami.Core
 
         public int Dispatch()
         {
+            var lastPC = Cpu.PC;
+
+            if (Cpu.PC == 0xC782)
+            {
+                var x = 1;
+            }
+
             var ins = Cpu.Memory.Read(Cpu.PC);
             var bytes = Cpu6502InstructionSet.bytes[ins];
 
@@ -135,21 +142,31 @@ namespace Fami.Core
                     throw new NotImplementedException();
             }
 
-            Cpu6502InstructionSet.OpCodes[ins](Cpu);
+            Cpu.PC += bytes;
 
-            switch (ins)
+            Cpu6502InstructionSet.OpCodes[ins](Cpu, bytes);
+
+            if (Cpu.PC == lastPC)
             {
-                case 0x4C:
-                case 0x20:
-                    break;
-                default:
-                    Cpu.PC += bytes;
-                    break;
+                throw new Exception("PC not updated!");
             }
 
 
+            var pcycles = Cpu6502InstructionSet.cycles[ins];
 
-            return Cpu6502InstructionSet.cycles[ins];
+            if (Cpu.Branched)
+            {
+                Cpu.Branched = false;
+                pcycles++;
+            }
+
+            if (Cpu.PageBoundsCrossed)
+            {
+                Cpu.PageBoundsCrossed = false;
+                pcycles++;
+            }
+
+            return pcycles;
         }
 
     }
