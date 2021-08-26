@@ -869,11 +869,11 @@ namespace Fami.Core
             //TestZ(cpu.arg, cpu);
             cpu.Memory.Write(cpu.EffectiveAddr, cpu.arg);
 
-            var temp2 = temp + cpu.A + cpu.C;
+            var temp2 = cpu.arg + cpu.A + cpu.C;
 
             // Stolen from FCEUX
             // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-            cpu.V = ((((cpu.A ^ temp) & 0x80) ^ 0x80) & ((cpu.A ^ temp2) & 0x80)) >> 7 & 1;
+            cpu.V = ((((cpu.A ^ cpu.arg) & 0x80) ^ 0x80) & ((cpu.A ^ temp2) & 0x80)) >> 7 & 1;
             cpu.C = (temp2 >> 8) & 1;
 
             cpu.A = (byte)(temp2 & 0xFF);

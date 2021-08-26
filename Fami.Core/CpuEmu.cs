@@ -96,6 +96,7 @@ namespace Fami.Core
             switch (Cpu.PC)
             {
                 case 0xF55E:
+                case 0xFAF1:
                     var x = 1;
                     break;
             }
