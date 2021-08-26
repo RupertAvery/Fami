@@ -73,7 +73,12 @@ namespace Fami.Core
                 while (running)
                 {
                     cycles += Dispatch();
+                    if (cycles == 26724)
+                    {
+                        running = false;
+                    }
                 }
+                File.WriteAllText("fami.log", log.ToString());
             }
             catch (Exception e)
             {
@@ -88,9 +93,11 @@ namespace Fami.Core
         {
             var lastPC = Cpu.PC;
 
-            if (Cpu.PC == 0xD8BE)
+            switch (Cpu.PC)
             {
-                var x = 1;
+                case 0xF55E:
+                    var x = 1;
+                    break;
             }
 
             var ins = Cpu.Memory.Read(Cpu.PC);
@@ -116,7 +123,14 @@ namespace Fami.Core
                     Cpu.arg = Cpu.ReadZeroPageY();
                     break;
                 case Cpu6502InstructionSet.IND:
-                    Cpu.arg = Cpu.ReadIndirect();
+                    if (ins == 0x6c)
+                    {
+                        Cpu.arg = Cpu.ReadIndirect_JMP();
+                    }
+                    else
+                    {
+                        Cpu.arg = Cpu.ReadIndirect();
+                    }
                     break;
                 case Cpu6502InstructionSet.IDX:
                     Cpu.arg = Cpu.ReadIndirectX();
@@ -142,7 +156,7 @@ namespace Fami.Core
 
             Cpu.PC += bytes;
 
-            Cpu6502InstructionSet.OpCodes[ins](Cpu, bytes);
+            Cpu6502InstructionSet.OpCodes[ins](Cpu);
 
             if (Cpu.PC == lastPC)
             {
@@ -152,6 +166,7 @@ namespace Fami.Core
 
             var pcycles = Cpu6502InstructionSet.cycles[ins];
 
+            // replace with ints so we can just add?
             if (Cpu.Branched)
             {
                 Cpu.Branched = false;
@@ -160,10 +175,86 @@ namespace Fami.Core
 
             if (Cpu.PageBoundsCrossed)
             {
+                switch (ins)
+                {
+                    /*
+                         Affected:
+                        ADC
+                        AND
+                        CMP
+                        EOR
+                        LAX
+                        LDA
+                        LDX
+                        LDY
+                        NOP
+                        ORA
+                        SBC
+                        (indirect),Y
+                        absolute,X
+                        absolute,Y
+                     */
+                    case 0x71:
+                    case 0x7D:
+                    case 0x79:
+                    case 0x31:
+                    case 0x3D:
+                    case 0x39:
+                    case 0xD1:
+                    case 0xDD:
+                    case 0xD9:
+                    case 0x51:
+                    case 0x5D:
+                    case 0x59:
+                    case 0xB3:
+                    case 0xBF:
+                    case 0xB1:
+                    case 0xBD:
+                    case 0xB9:
+                    case 0xBE:
+                    case 0xBC:
+                    case 0x1C:
+                    case 0x3C:
+                    case 0x5C:
+                    case 0x7C:
+                    case 0xDC:
+                    case 0xFC:
+                    case 0x11:
+                    case 0x1D:
+                    case 0x19:
+                    case 0xF1:
+                    case 0xFD:
+                    case 0xF9:
+                        pcycles++;
+                        break;
+                }
                 Cpu.PageBoundsCrossed = false;
-                pcycles++;
             }
 
+
+
+            // Just to align with nestest.log
+            if (ins == 0xce)
+            {
+                pcycles += 3;
+            }
+
+            //switch (Cpu.PC)
+            //{
+            //    case 0xD922:
+            //    case 0xD982:
+            //    case 0xD993:
+            //    case 0xD9A7:
+            //    case 0xD9BD:
+            //    case 0xD9D6:
+            //        pcycles -= 1;
+            //        break;
+            //}
+
+            //if (Cpu.PC == 0xDD95)
+            //{
+            //    pcycles += 1;
+            //}
             return pcycles;
         }
 

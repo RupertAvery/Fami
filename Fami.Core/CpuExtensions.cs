@@ -29,14 +29,14 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadZeroPageX(this Cpu6502State cpu)
         {
-            cpu.EffectiveAddr = cpu.Memory.Read((cpu.Memory.Read(cpu.PC + 1) + cpu.X) % 0x100);
+            cpu.EffectiveAddr = (cpu.Memory.Read(cpu.PC + 1) + cpu.X) % 0x100;
             return cpu.Memory.Read(cpu.EffectiveAddr);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadZeroPageY(this Cpu6502State cpu)
         {
-            cpu.EffectiveAddr = cpu.Memory.Read((cpu.Memory.Read(cpu.PC + 1) + cpu.Y) % 0x100);
+            cpu.EffectiveAddr = (cpu.Memory.Read(cpu.PC + 1) + cpu.Y) % 0x100;
             return cpu.Memory.Read(cpu.EffectiveAddr);
         }
 
@@ -50,12 +50,15 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadAbsoluteX(this Cpu6502State cpu)
         {
-            cpu.EffectiveAddr = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC + 2) * 0x100 + cpu.X;
+            var basemem = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC + 2) * 0x100;
+            var basememPage = (basemem >> 8) & 0xff;
+            cpu.EffectiveAddr = basemem + cpu.X;
+            var effAddPage = (cpu.EffectiveAddr >> 8) & 0xff;
 
-            var x = cpu.PC >> 8;
-            var y = cpu.EffectiveAddr >> 8;
+            //var x = cpu.PC >> 8;
+            //var y = cpu.EffectiveAddr >> 8;
 
-            if (x != y)
+            if (basememPage != effAddPage)
             {
                 cpu.PageBoundsCrossed = true;
             }
@@ -66,18 +69,21 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadAbsoluteY(this Cpu6502State cpu)
         {
-            cpu.EffectiveAddr = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC + 2) * 0x100 + cpu.Y;
+            var basemem = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC + 2) * 0x100;
+            var basememPage = (basemem >> 8) & 0xff;
+            cpu.EffectiveAddr = basemem + cpu.Y;
+            var effAddPage = (cpu.EffectiveAddr >> 8) & 0xff;
 
-            var x = cpu.PC >> 8;
-            var y = cpu.EffectiveAddr >> 8;
+            //var x = cpu.PC >> 8;
+            //var y = cpu.EffectiveAddr >> 8;
 
-            if (x != y)
+            if (basememPage != effAddPage)
             {
                 cpu.PageBoundsCrossed = true;
             }
 
 
-            return cpu.Memory.Read(cpu.EffectiveAddr);
+            return cpu.Memory.Read(cpu.EffectiveAddr & 0xFFFF);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -92,36 +98,60 @@ namespace Fami.Core
         public static int ReadIndirect(this Cpu6502State cpu)
         {
             var arg = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC + 2) * 0x100;
-            cpu.EffectiveAddr = arg;
-            return arg;
+            cpu.EffectiveAddr = cpu.Memory.Read(arg) + cpu.Memory.Read(arg + 1) * 0x100;
+            return cpu.Memory.Read(cpu.EffectiveAddr);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int ReadIndirect_JMP(this Cpu6502State cpu)
+        {
+            var arg = cpu.Memory.Read(cpu.PC + 1);
+            arg += cpu.Memory.Read(cpu.PC + 2) * 0x100;
+            if ((arg & 0xFF) == 0xFF)
+            {
+                cpu.EffectiveAddr = cpu.Memory.Read(arg) + cpu.Memory.Read(arg + 1 - 0x100) * 0x100;
+            }
+            else
+            {
+                cpu.EffectiveAddr = cpu.Memory.Read(arg) + cpu.Memory.Read(arg + 1) * 0x100;
+            }
+            return cpu.Memory.Read(cpu.EffectiveAddr);
         }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadIndirectX(this Cpu6502State cpu)
         {
-            var arg = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC + 2) * 0x100;
+            var arg = cpu.Memory.Read(cpu.PC + 1);
             var ix = arg + cpu.X;
             cpu.EffectiveAddr = cpu.Memory.Read(ix % 0x100) + cpu.Memory.Read((ix + 1) % 0x100) * 0x100;
             return cpu.Memory.Read(cpu.EffectiveAddr);
+
+
+            //var arg = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC + 2) * 0x100;
+            //var ix = arg + cpu.X;
+            //cpu.EffectiveAddr = cpu.Memory.Read(ix % 0x100) + cpu.Memory.Read((ix + 1) % 0x100) * 0x100;
+            //return cpu.Memory.Read(cpu.EffectiveAddr);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ReadIndirectY(this Cpu6502State cpu)
         {
-            var arg = cpu.Memory.Read(cpu.PC + 1) + cpu.Memory.Read(cpu.PC +2) * 0x100;
-            var iy = arg;
-            cpu.EffectiveAddr = cpu.Memory.Read(iy) + cpu.Memory.Read((iy + 1) % 0x100) * 0x100 + cpu.Y;
+            var arg = cpu.Memory.Read(cpu.PC + 1);
+            var basemem = cpu.Memory.Read(arg) + cpu.Memory.Read((arg + 1) % 0x100) * 0x100;
+            var basememPage = (basemem >> 8) & 0xff;
+            cpu.EffectiveAddr = basemem + cpu.Y;
+            var effAddPage = (cpu.EffectiveAddr >> 8) & 0xff;
 
-            var x = cpu.PC >> 8;
-            var y = cpu.EffectiveAddr >> 8;
+            //var x = cpu.PC >> 8;
+            //var y = cpu.EffectiveAddr >> 8;
 
-            if (x != y)
+            if (basememPage != effAddPage)
             {
                 cpu.PageBoundsCrossed = true;
             }
 
-            return cpu.Memory.Read(cpu.EffectiveAddr);
+            return cpu.Memory.Read(cpu.EffectiveAddr & 0xFFFF);
         }
 
 
