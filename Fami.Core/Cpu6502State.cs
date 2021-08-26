@@ -7,10 +7,10 @@
         public int Y { get; set; }
         public int S { get; set; }
 
-        public byte P
+        public int P
         {
             get =>
-                (byte)(
+                (
                     (N << 7) +
                     (V << 6) +
                     (B2 << 5) +

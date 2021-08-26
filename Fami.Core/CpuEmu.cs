@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Text;
 
 namespace Fami.Core
@@ -38,11 +39,12 @@ namespace Fami.Core
         public Ppu Ppu { get; set; }
         private int cycles;
         private bool running;
-
+        private StringBuilder log;
         public CpuEmu()
         {
             Cpu = new Cpu6502State();
             Ppu = new Ppu();
+            log = new StringBuilder();
         }
 
         public void Init()
@@ -66,10 +68,17 @@ namespace Fami.Core
 
         public void Execute()
         {
-
-            while (running)
+            try
             {
-                cycles += Dispatch();
+                while (running)
+                {
+                    cycles += Dispatch();
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                File.WriteAllText("fami.log", log.ToString());
             }
 
 
@@ -79,7 +88,7 @@ namespace Fami.Core
         {
             var lastPC = Cpu.PC;
 
-            if (Cpu.PC == 0xC782)
+            if (Cpu.PC == 0xD8BE)
             {
                 var x = 1;
             }
@@ -87,22 +96,11 @@ namespace Fami.Core
             var ins = Cpu.Memory.Read(Cpu.PC);
             var bytes = Cpu6502InstructionSet.bytes[ins];
 
-            var sb = new StringBuilder();
-            for (var i = 0; i < bytes; i++)
-            {
-                sb.Append($"{Cpu.Memory.Read(Cpu.PC + i):X2} ");
-            }
-
-            for (var i = 0; i < 3 - bytes; i++)
-            {
-                sb.Append($"   ");
-            }
-
-            Console.WriteLine($"{Cpu.PC:X4}  {sb}  A:{Cpu.A:X2} X:{Cpu.X:X2} Y:{Cpu.Y:X2} P:{Cpu.P:X2} S:{Cpu.S:X2} CYC:{cycles}");
-
+            Log(bytes);
 
             switch (Cpu6502InstructionSet.addrmodes[ins])
             {
+                case Cpu6502InstructionSet.ACC:
                 case Cpu6502InstructionSet.IMP:
                     break;
                 case Cpu6502InstructionSet.IMM:
@@ -167,6 +165,23 @@ namespace Fami.Core
             }
 
             return pcycles;
+        }
+
+        private void Log(int bytes)
+        {
+            var sb = new StringBuilder();
+            for (var i = 0; i < bytes; i++)
+            {
+                sb.Append($"{Cpu.Memory.Read(Cpu.PC + i):X2} ");
+            }
+
+            for (var i = 0; i < 3 - bytes; i++)
+            {
+                sb.Append($"   ");
+            }
+
+            log.AppendLine($"{Cpu.PC:X4}  {sb} A:{Cpu.A:X2} X:{Cpu.X:X2} Y:{Cpu.Y:X2} P:{Cpu.P:X2} SP:{Cpu.S:X2} CYC:{cycles}");
+
         }
 
     }

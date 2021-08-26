@@ -145,8 +145,9 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ASL(Cpu6502State cpu, int bytes)
         {
-            SetC(cpu.A >> 7 & 1, cpu);
-            cpu.A = (cpu.A << 1) & 0xFF;
+            cpu.A <<= 1;
+            cpu.C = (cpu.A >> 8) & 1;
+            cpu.A &= 0xFF;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -155,10 +156,12 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ASL_Mem(Cpu6502State cpu, int bytes)
         {
-            SetC(cpu.arg >> 7 & 1, cpu);
-            cpu.arg = (cpu.arg << 1) & 0xFF;
+            cpu.arg = cpu.arg << 1;
+            cpu.C = (cpu.arg >> 8) & 1;
+            cpu.arg = cpu.arg & 0xFF;
             TestN(cpu.arg, cpu);
             TestZ(cpu.arg, cpu);
+
             cpu.Memory.Write(cpu.EffectiveAddr, cpu.arg);
         }
 
@@ -166,8 +169,9 @@ namespace Fami.Core
         public static void PHP(Cpu6502State cpu, int bytes)
         {
             var flags = cpu.P | 0b00110000;
-            cpu.Memory.Write(cpu.S, flags);
-            cpu.S -= 1;
+            Push(cpu, flags);
+            //cpu.Memory.Write(cpu.S + 0x100, flags);
+            //cpu.S -= 1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -181,6 +185,20 @@ namespace Fami.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void Push(Cpu6502State cpu, int value)
+        {
+            cpu.Memory.Write(cpu.S + 0x100, value);
+            cpu.S -= 1;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int Pop(Cpu6502State cpu)
+        {
+            cpu.S += 1;
+            return cpu.Memory.Read(cpu.S + 0x100);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void CLC(Cpu6502State cpu, int bytes)
         {
             cpu.C = 0;
@@ -189,38 +207,61 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void JSR(Cpu6502State cpu, int bytes)
         {
-            var pc = cpu.PC + 2;
-            cpu.Memory.Write(cpu.S, pc & 0xFF);
-            cpu.Memory.Write(cpu.S - 1, (pc / 0x100) & 0xFF);
-            cpu.S -= 2;
+            // PC already points to the address AFTER the last byte of the instruction, so subtract 1
+            var pc = cpu.PC - 1;
+            Push(cpu, (pc >> 8) & 0xFF);
+            Push(cpu, pc & 0xFF);
+            //cpu.Memory.Write(0x100 + cpu.S, (pc >> 8) & 0xFF);
+            //cpu.Memory.Write(0x100 + cpu.S - 1, pc & 0xFF);
+            //cpu.S -= 2;
             cpu.PC = cpu.EffectiveAddr;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void BIT(Cpu6502State cpu, int bytes)
         {
-            var temp = cpu.A & cpu.arg;
-            TestN(temp, cpu);
-            TestZ(temp, cpu);
-            TestV(temp, cpu);
+            TestN(cpu.arg, cpu);
+            TestV(cpu.arg, cpu);
+            TestZ(cpu.A & cpu.arg, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ROL(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            var temp = cpu.C;
+            cpu.C = (cpu.A >> 7) & 1;
+            cpu.A = ((cpu.A << 1) | temp & 1) & 0xFF;
+            TestN(cpu.A, cpu);
+            TestZ(cpu.A, cpu);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ROL_Mem(Cpu6502State cpu, int bytes)
+        {
+            var temp = cpu.C;
+            cpu.C = (cpu.arg >> 7) & 1;
+            cpu.arg = ((cpu.arg << 1) | temp & 1) & 0xFF;
+            TestN(cpu.arg, cpu);
+            TestZ(cpu.arg, cpu);
+            cpu.Memory.Write(cpu.EffectiveAddr, cpu.arg);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void PLP(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            //cpu.S += 1;
+            //cpu.P = cpu.Memory.Read(cpu.S) | 0b00100000;
+            cpu.P = Pop(cpu) | 0b00100000;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void BMI(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            if (cpu.N == 1)
+            {
+                cpu.Branched = true;
+                cpu.PC = GetRel(cpu);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -232,26 +273,48 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void RTI(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            //The status register is pulled with the break flag and bit 5 ignored.
+            cpu.P = Pop(cpu) & 0b11001111 | 0b00100000;
+            // Then PC is pulled from the stack.
+            cpu.PC = Pop(cpu);
+            cpu.PC += Pop(cpu) * 0x100;
+
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void EOR(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.A ^= cpu.arg;
+            TestN(cpu.A, cpu);
+            TestZ(cpu.A, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LSR(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.C = cpu.A & 1;
+            cpu.A = (cpu.A >> 1) & 0xFF;
+            cpu.N = 0;
+            TestZ(cpu.A, cpu);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void LSR_Mem(Cpu6502State cpu, int bytes)
+        {
+            cpu.C = cpu.arg & 1;
+            cpu.arg = (cpu.arg >> 1) & 0xFF;
+            cpu.N = 0;
+            TestZ(cpu.arg, cpu);
+
+            cpu.Memory.Write(cpu.EffectiveAddr, cpu.arg);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void PHA(Cpu6502State cpu, int bytes)
         {
-            cpu.Memory.Write(cpu.S, cpu.A);
-            cpu.S++;
+            Push(cpu, cpu.A);
+            //cpu.Memory.Write(cpu.S, cpu.A);
+            //cpu.S--;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -279,16 +342,27 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void RTS(Cpu6502State cpu, int bytes)
         {
-            cpu.PC = cpu.Memory.Read(cpu.S) + cpu.Memory.Read(cpu.S + 1) * 0x100;
-            cpu.S += 2;
+            cpu.PC = Pop(cpu);
+            cpu.PC += Pop(cpu) * 0x100;
+
+            //cpu.S += 1;
+            //cpu.PC = cpu.Memory.Read(cpu.S + 0x100);
+            //cpu.S += 1;
+            //cpu.PC += cpu.Memory.Read(cpu.S + 0x100) * 0x100;
+            cpu.PC++;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ADC(Cpu6502State cpu, int bytes)
         {
             var temp = cpu.arg + cpu.A + cpu.C;
+
+            // Stolen from FCEUX
+            // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+            cpu.V = ((((cpu.A ^ cpu.arg) & 0x80) ^ 0x80) & ((cpu.A ^ temp) & 0x80)) >> 7 & 1;
+            cpu.C = (temp >> 8) & 1;
+
             cpu.A = (byte)(temp & 0xFF);
-            SetC(temp >> 8 & 1, cpu);
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -296,14 +370,30 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ROR(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            var temp = cpu.C;
+            cpu.C = cpu.A & 1;
+            cpu.A = ((cpu.A >> 1) | temp << 7) & 0xFF;
+            TestN(cpu.A, cpu);
+            TestZ(cpu.A, cpu);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ROR_Mem(Cpu6502State cpu, int bytes)
+        {
+            var temp = cpu.C;
+            cpu.C = cpu.arg & 1;
+            cpu.arg = ((cpu.arg >> 1) | temp << 7) & 0xFF;
+            TestN(cpu.arg, cpu);
+            TestZ(cpu.arg, cpu);
+            cpu.Memory.Write(cpu.EffectiveAddr, cpu.arg);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void PLA(Cpu6502State cpu, int bytes)
         {
-            cpu.S += 1;
-            cpu.A = cpu.Memory.Read(cpu.S);
+            cpu.A = Pop(cpu);
+            //cpu.S += 1;
+            //cpu.A = cpu.Memory.Read(cpu.S);
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -333,25 +423,33 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void STY(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.Memory.Write(cpu.EffectiveAddr, cpu.Y);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void STX(Cpu6502State cpu, int bytes)
         {
-            cpu.X = cpu.arg;
+            cpu.Memory.Write(cpu.EffectiveAddr, cpu.X);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DEY(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.Y -= 1;
+            if (cpu.Y < 0x00)
+            {
+                cpu.Y = 0xFF;
+            }
+            TestN(cpu.Y, cpu);
+            TestZ(cpu.Y, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void TXA(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.A = cpu.X;
+            TestN(cpu.A, cpu);
+            TestZ(cpu.A, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -367,19 +465,23 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void TYA(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.A = cpu.Y;
+            TestN(cpu.A, cpu);
+            TestZ(cpu.A, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void TXS(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.S = cpu.X;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LDY(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.Y = cpu.arg;
+            TestN(cpu.Y, cpu);
+            TestZ(cpu.Y, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -401,13 +503,17 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void TAY(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.Y = cpu.A;
+            TestN(cpu.Y, cpu);
+            TestZ(cpu.Y, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void TAX(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.X = cpu.A;
+            TestN(cpu.X, cpu);
+            TestZ(cpu.X, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -447,13 +553,15 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void CLV(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.V = 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void TSX(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.X = cpu.S & 0xFF;
+            TestN(cpu.X, cpu);
+            TestZ(cpu.X, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -470,26 +578,48 @@ namespace Fami.Core
         {
             var temp = cpu.A - cpu.arg;
             cpu.C = cpu.A >= cpu.arg ? 1 : 0;
-            TestN(temp & 0xFFFF, cpu);
-            TestZ(temp & 0xFFFF, cpu);
+            TestN(temp & 0xFF, cpu);
+            TestZ(temp & 0xFF, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DEC(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            var temp = cpu.arg - 1;
+            if (temp < 0x00)
+            {
+                temp = temp & 0xff;
+            }
+
+            TestN(temp, cpu);
+            TestZ(temp, cpu);
+
+            cpu.Memory.Write(cpu.EffectiveAddr, temp);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void INY(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.Y += 1;
+            if (cpu.Y > 0xFF)
+            {
+                cpu.Y = 0;
+            }
+            TestN(cpu.Y, cpu);
+            TestZ(cpu.Y, cpu);
+
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DEX(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.X -= 1;
+            if (cpu.X < 0x00)
+            {
+                cpu.X = 0xFF;
+            }
+            TestN(cpu.X, cpu);
+            TestZ(cpu.X, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -513,26 +643,50 @@ namespace Fami.Core
         {
             var temp = cpu.X - cpu.arg;
             cpu.C = cpu.X >= cpu.arg ? 1 : 0;
-            TestN(temp & 0xFFFF, cpu);
-            TestZ(temp & 0xFFFF, cpu);
+            TestN(temp & 0xFF, cpu);
+            TestZ(temp & 0xFF, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SBC(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            var temp = cpu.A - cpu.arg - ((cpu.C ^ 1) & 1);
+
+            // Stolen from FCEUX
+            // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
+            cpu.V = ((cpu.A ^ temp) & (cpu.A ^ cpu.arg) & 0x80) >> 7 & 1;
+            cpu.C = (temp >> 8) & 1 ^ 1;
+
+            cpu.A = (byte)(temp & 0xFF);
+            TestN(cpu.A, cpu);
+            TestZ(cpu.A, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void INC(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.arg += 1;
+            if (cpu.arg > 0xff)
+            {
+                cpu.arg = 0x00;
+            }
+            TestN(cpu.arg, cpu);
+            TestZ(cpu.arg, cpu);
+
+            cpu.Memory.Write(cpu.EffectiveAddr, cpu.arg);
+
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void INX(Cpu6502State cpu, int bytes)
         {
-            throw new NotImplementedException();
+            cpu.X += 1;
+            if (cpu.X > 0xFF)
+            {
+                cpu.X = 0;
+            }
+            TestN(cpu.X, cpu);
+            TestZ(cpu.X, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
