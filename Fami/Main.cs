@@ -97,20 +97,9 @@ namespace Fami
             var emu = new CpuEmu();
             emu.Init();
 
-            var rom = INesFile.Read("nestest.nes");
+            var cart = Cartridge.Load("nestest.nes");
 
-            var addr = 0x10000;
-            addr = addr - rom.RomBank * 16384;
-
-            for (var i = 0; i < rom.RomBank; i++)
-            {
-                var romBank = rom.RomBanks[i];
-
-                for (var j = 0; j < romBank.Data.Length; j++)
-                {
-                    emu.Cpu.Memory.Write(addr + j, romBank.Data[j]);
-                }
-            }
+            emu.LoadCartridge(cart);
 
             //emu.Cpu.Memory.Write(0xFFFC, 0x00);
             //emu.Cpu.Memory.Write(0xFFFD, 0xC0);
@@ -131,7 +120,7 @@ namespace Fami
             //emu.Cpu.Memory.Write(0xC5FF, 0xC7);
             emu.Reset();
 
-            emu.Cpu.PC = 0xc000;
+            //emu.Cpu.PC = 0xc000;
 
             emu.Execute();
         }

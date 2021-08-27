@@ -35,7 +35,7 @@
 
         public int PC { get; set; }
 
-        public Cpu6502Memory Memory { get; set; }
+        //public Cpu6502Memory Memory { get; set; }
 
         public int N { get; set; }
         public int V { get; set; }
@@ -51,18 +51,64 @@
 
         public sbyte rel;
         public int arg;
+        public int cycles;
 
         public void Init()
         {
-            Memory = new Cpu6502Memory();
-
+            //Memory = new Cpu6502Memory();
+            Ppu = new Ppu();
         }
 
         public void Reset()
         {
+            // https://www.pagetable.com/?p=410
+            cycles = 0;
             S = 0xFD;
             P = 0x24;
-            PC = Memory.Read(0xFFFC) + Memory.Read(0xFFFD) * 0x100;
+            PC = Read(0xFFFC) + Read(0xFFFD) * 0x100;
+            cycles = 7;
+            Ppu.Reset();
+        }
+
+
+        private int[] ram = new int[0x800];
+        private Cartridge _cart;
+        public Ppu Ppu { get; private set; }
+
+        public int Read(int address)
+        {
+            var (val, handled) = _cart.CpuRead(address);
+            if (handled)
+            {
+                return val;
+            }
+            else if (address < 0x2000)
+            {
+                return ram[address & 0x07FF];
+            }
+            else if (address <= 0x3000)
+            {
+                return Ppu.Read(address);
+            }
+
+            return 0;
+        }
+
+        public void Write(int address, int value)
+        {
+            if (address < 0x2000)
+            {
+                ram[address & 0x07FF] = value;
+            }
+            else if (address <= 0x3000)
+            {
+                Ppu.Write(address, value);
+            }
+        }
+
+        public void LoadCartridge(Cartridge cart)
+        {
+            _cart = cart;
         }
     }
 }
