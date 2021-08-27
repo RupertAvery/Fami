@@ -5,6 +5,15 @@
     <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ppy.SDL2-CS" Version="1.0.82" />
+    <PackageReference Include="sdl2-cs.netcore" Version="2.0.8" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Fami.Core\Fami.Core.csproj" />
   </ItemGroup>

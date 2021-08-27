@@ -1,8 +1,8 @@
 ﻿using System;
 using System.IO;
-using Fami.Core;
+using static SDL2.SDL;
 
-namespace Nestor
+namespace Fami
 {
     public class RomBank
     {
@@ -53,7 +53,7 @@ namespace Nestor
                 h.RamBank = r.ReadByte();
                 h.Region = r.ReadByte();
                 r.ReadBytes(6);
-                for(var i =0; i < h.RomBank; i++)
+                for (var i = 0; i < h.RomBank; i++)
                 {
                     h.RomBanks[i] = new RomBank();
                     h.RomBanks[i].Data = r.ReadBytes(16384);
@@ -71,50 +71,63 @@ namespace Nestor
 
     class Program
     {
+
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            var rand = new Random();
 
-            var emu = new CpuEmu();
-            emu.Init();
-
-            var rom = INesFile.Read("nestest.nes");
-
-            var addr = 0x10000;
-            addr = addr - rom.RomBank * 16384;
-
-            for (var i=0;i < rom.RomBank; i++)
+            using (var main = new Main())
             {
-                var romBank = rom.RomBanks[i];
+                bool running = true;
+                uint r = 0;
+                uint g = 0;
+                uint b = 0;
 
-                for (var j = 0; j < romBank.Data.Length; j++)
+                while (running)
                 {
-                    emu.Cpu.Memory.Write(addr + j, romBank.Data[j]);
+                    SDL_Event evt;
+                    while (SDL_PollEvent(out evt) != 0)
+                    {
+                        switch (evt.type)
+                        {
+                            case SDL_EventType.SDL_QUIT:
+                                running = false;
+                                break;
+                            case SDL_EventType.SDL_KEYUP:
+                            case SDL_EventType.SDL_KEYDOWN:
+                                //KeyEvent(evt.key);
+                                break;
+
+                                //case SDL_EventType.SDL_DROPFILE:
+                                //    var filename = Marshal.PtrToStringUTF8(evt.drop.file);
+                                //    try
+                                //    {
+                                //        romPath = filename;
+                                //        goto reload;
+                                //    }
+                                //    catch
+                                //    {
+                                //        Log("An error occurred loading the dropped ROM file.");
+                                //        return;
+                                //    }
+                        }
+                    }
+
+                    main.Fill(255, r, g, b);
+
+                    r = (uint)rand.Next(255);
+                    g = (uint)rand.Next(255);
+                    b = (uint)rand.Next(255);
+                    //r++;
+                    //if (r > 255) r = 0;
+                    //if (r % 3 == 0) g++;
+                    //if (g > 255) g = 0;
+                    //if (g % 3 == 0) b++;
+                    //if (b > 255) b = 0;
+
+                    main.Draw();
                 }
             }
-
-            //emu.Cpu.Memory.Write(0xFFFC, 0x00);
-            //emu.Cpu.Memory.Write(0xFFFD, 0xC0);
-
-            //emu.Cpu.Memory.Write(0xC000, 0x4C);
-            //emu.Cpu.Memory.Write(0xC001, 0xF5);
-            //emu.Cpu.Memory.Write(0xC002, 0xC5);
-            //emu.Cpu.Memory.Write(0xC5F5, 0xA2);
-            //emu.Cpu.Memory.Write(0xC5F6, 0x00);
-            //emu.Cpu.Memory.Write(0xC5F7, 0x86);
-            //emu.Cpu.Memory.Write(0xC5F8, 0x00);
-            //emu.Cpu.Memory.Write(0xC5F9, 0x86);
-            //emu.Cpu.Memory.Write(0xC5FA, 0x10);
-            //emu.Cpu.Memory.Write(0xC5FB, 0x86);
-            //emu.Cpu.Memory.Write(0xC5FC, 0x11);
-            //emu.Cpu.Memory.Write(0xC5FD, 0x20);
-            //emu.Cpu.Memory.Write(0xC5FE, 0x2D);
-            //emu.Cpu.Memory.Write(0xC5FF, 0xC7);
-            emu.Reset();
-
-            emu.Cpu.PC = 0xc000;
-
-            emu.Execute();
         }
     }
 }
