@@ -2,15 +2,15 @@
 {
     public class Cpu6502State
     {
-        public int A { get; set; }
-        public int X { get; set; }
-        public int Y { get; set; }
-        public int S { get; set; }
+        public uint A { get; set; }
+        public uint X { get; set; }
+        public uint Y { get; set; }
+        public uint S { get; set; }
 
-        public int P
+        public uint P
         {
             get =>
-                (
+                (uint)(
                     (N << 7) +
                     (V << 6) +
                     (B2 << 5) +
@@ -33,25 +33,27 @@
             }
         }
 
-        public int PC { get; set; }
+        public uint PC { get; set; }
 
         //public Cpu6502Memory Memory { get; set; }
 
-        public int N { get; set; }
-        public int V { get; set; }
-        public int B2 { get; set; }
-        public int B1 { get; set; }
-        public int D { get; set; }
-        public int I { get; set; }
-        public int Z { get; set; }
-        public int C { get; set; }
-        public int EffectiveAddr { get; set; }
+        public uint N { get; set; }
+        public uint V { get; set; }
+        public uint B2 { get; set; }
+        public uint B1 { get; set; }
+        public uint D { get; set; }
+        public uint I { get; set; }
+        public uint Z { get; set; }
+        public uint C { get; set; }
+
+        public uint EffectiveAddr { get; set; }
         public bool PageBoundsCrossed { get; set; }
         public bool Branched { get; set; }
 
         public sbyte rel;
-        public int arg;
-        public int cycles;
+        public uint arg;
+        public uint cycles;
+        public uint instructions;
 
         public void Init()
         {
@@ -71,11 +73,11 @@
         }
 
 
-        private int[] ram = new int[0x800];
+        private uint[] ram = new uint[0x800];
         private Cartridge _cart;
         public Ppu Ppu { get; private set; }
 
-        public int Read(int address)
+        public uint Read(uint address)
         {
             var (val, handled) = _cart.CpuRead(address);
             if (handled)
@@ -94,7 +96,7 @@
             return 0;
         }
 
-        public void Write(int address, int value)
+        public void Write(uint address, uint value)
         {
             if (address < 0x2000)
             {
@@ -109,6 +111,7 @@
         public void LoadCartridge(Cartridge cart)
         {
             _cart = cart;
+            Ppu.LoadCartridge(cart);
         }
     }
 }

@@ -3,6 +3,12 @@ using Fami.Core.Mappers;
 
 namespace Fami.Core
 {
+    public enum MirrorEnum
+    {
+        Vertical,
+        Horizontal,
+    }
+
     public class Cartridge
     {
         private const int ROMBANK_SIZE = 16384;
@@ -18,7 +24,7 @@ namespace Fami.Core
         public byte[] VRomBankData { get; private set; }
         public byte[] SaveRamData { get; private set; }
         public BaseMapper Mapper { get; private set; }
-
+        public MirrorEnum Mirror { get;set;}
         public Cartridge()
         {
 
@@ -52,26 +58,26 @@ namespace Fami.Core
             }
         }
 
-        public (int value, bool handled) CpuRead(int address)
+        public (uint value, bool handled) CpuRead(uint address)
         {
             var (mappedAddress, handled) = Mapper.CpuMapRead(address);
 
-            return handled ? (RomBankData[mappedAddress], true) : (0, false);
+            return handled ? ((uint)RomBankData[mappedAddress], true) : (0, false);
         }
 
-        public bool CpuWrite(int address, int value)
+        public bool CpuWrite(uint address, uint value)
         {
             return false;
         }
 
-        public (int value, bool handled) PpuRead(int address)
+        public (uint value, bool handled) PpuRead(uint address)
         {
             var (mappedAddress, handled) = Mapper.PpuMapRead(address);
 
-            return handled ? (VRomBankData[mappedAddress], true) : (0, false);
+            return handled ? (VRomBankData[mappedAddress], true) : (0u, false);
         }
 
-        public bool PpuWrite(int address, int value)
+        public bool PpuWrite(int address, uint value)
         {
             return false;
         }

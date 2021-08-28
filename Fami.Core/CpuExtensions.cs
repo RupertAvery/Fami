@@ -6,14 +6,14 @@ namespace Fami.Core
     {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadImmediate(this Cpu6502State cpu)
+        public static uint ReadImmediate(this Cpu6502State cpu)
         {
             cpu.EffectiveAddr = cpu.PC + 1;
             return cpu.Read(cpu.EffectiveAddr);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadZeroPage(this Cpu6502State cpu)
+        public static uint ReadZeroPage(this Cpu6502State cpu)
         {
             cpu.EffectiveAddr = cpu.Read(cpu.PC + 1);
             return cpu.Read(cpu.EffectiveAddr);
@@ -27,28 +27,28 @@ namespace Fami.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadZeroPageX(this Cpu6502State cpu)
+        public static uint ReadZeroPageX(this Cpu6502State cpu)
         {
             cpu.EffectiveAddr = (cpu.Read(cpu.PC + 1) + cpu.X) % 0x100;
             return cpu.Read(cpu.EffectiveAddr);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadZeroPageY(this Cpu6502State cpu)
+        public static uint ReadZeroPageY(this Cpu6502State cpu)
         {
             cpu.EffectiveAddr = (cpu.Read(cpu.PC + 1) + cpu.Y) % 0x100;
             return cpu.Read(cpu.EffectiveAddr);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadAbsolute(this Cpu6502State cpu)
+        public static uint ReadAbsolute(this Cpu6502State cpu)
         {
             cpu.EffectiveAddr = cpu.Read(cpu.PC + 1) + cpu.Read(cpu.PC + 2) * 0x100;
             return cpu.Read(cpu.EffectiveAddr);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadAbsoluteX(this Cpu6502State cpu)
+        public static uint ReadAbsoluteX(this Cpu6502State cpu)
         {
             var basemem = cpu.Read(cpu.PC + 1) + cpu.Read(cpu.PC + 2) * 0x100;
             var basememPage = (basemem >> 8) & 0xff;
@@ -67,7 +67,7 @@ namespace Fami.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadAbsoluteY(this Cpu6502State cpu)
+        public static uint ReadAbsoluteY(this Cpu6502State cpu)
         {
             var basemem = cpu.Read(cpu.PC + 1) + cpu.Read(cpu.PC + 2) * 0x100;
             var basememPage = (basemem >> 8) & 0xff;
@@ -95,7 +95,7 @@ namespace Fami.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadIndirect(this Cpu6502State cpu)
+        public static uint ReadIndirect(this Cpu6502State cpu)
         {
             var arg = cpu.Read(cpu.PC + 1) + cpu.Read(cpu.PC + 2) * 0x100;
             cpu.EffectiveAddr = cpu.Read(arg) + cpu.Read(arg + 1) * 0x100;
@@ -103,7 +103,7 @@ namespace Fami.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadIndirect_JMP(this Cpu6502State cpu)
+        public static uint ReadIndirect_JMP(this Cpu6502State cpu)
         {
             var arg = cpu.Read(cpu.PC + 1);
             arg += cpu.Read(cpu.PC + 2) * 0x100;
@@ -120,7 +120,7 @@ namespace Fami.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadIndirectX(this Cpu6502State cpu)
+        public static uint ReadIndirectX(this Cpu6502State cpu)
         {
             var arg = cpu.Read(cpu.PC + 1);
             var ix = arg + cpu.X;
@@ -135,7 +135,7 @@ namespace Fami.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int ReadIndirectY(this Cpu6502State cpu)
+        public static uint ReadIndirectY(this Cpu6502State cpu)
         {
             var arg = cpu.Read(cpu.PC + 1);
             var basemem = cpu.Read(arg) + cpu.Read((arg + 1) % 0x100) * 0x100;

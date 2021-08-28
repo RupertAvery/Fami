@@ -89,26 +89,26 @@ namespace Fami.Core
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void TestN(int value, Cpu6502State cpu)
+        private static void TestN(uint value, Cpu6502State cpu)
         {
             cpu.N = (value & 0b10000000) >> 7;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void TestV(int value, Cpu6502State cpu)
+        private static void TestV(uint value, Cpu6502State cpu)
         {
             cpu.V = (value & 0b01000000) >> 6;
         }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void TestZ(int value, Cpu6502State cpu)
+        private static void TestZ(uint value, Cpu6502State cpu)
         {
-            cpu.Z = value == 0b00000000 ? 1 : 0;
+            cpu.Z = (value == 0b00000000) ? 1U : 0U;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void SetC(int value, Cpu6502State cpu)
+        private static void SetC(uint value, Cpu6502State cpu)
         {
             cpu.C = value;
         }
@@ -183,14 +183,14 @@ namespace Fami.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void Push(Cpu6502State cpu, int value)
+        private static void Push(Cpu6502State cpu, uint value)
         {
             cpu.Write(cpu.S + 0x100, value);
             cpu.S -= 1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int Pop(Cpu6502State cpu)
+        private static uint Pop(Cpu6502State cpu)
         {
             cpu.S += 1;
             return cpu.Read(cpu.S + 0x100);
@@ -436,10 +436,8 @@ namespace Fami.Core
         public static void DEY(Cpu6502State cpu)
         {
             cpu.Y -= 1;
-            if (cpu.Y < 0x00)
-            {
-                cpu.Y = 0xFF;
-            }
+            cpu.Y &= 0xFF;
+
             TestN(cpu.Y, cpu);
             TestZ(cpu.Y, cpu);
         }
@@ -487,7 +485,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LDA(Cpu6502State cpu)
         {
-            cpu.A = cpu.arg;
+            cpu.A = cpu.arg & 0xFF;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -527,7 +525,7 @@ namespace Fami.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int GetRel(Cpu6502State cpu)
+        private static uint GetRel(Cpu6502State cpu)
         {
             var x = cpu.PC >> 8;
             var y = (cpu.PC + cpu.rel) >> 8;
@@ -547,7 +545,7 @@ namespace Fami.Core
                     break;
             }
 
-            return temp & 0xFFFF;
+            return (uint)(temp & 0xFFFF);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -568,7 +566,7 @@ namespace Fami.Core
         public static void CPY(Cpu6502State cpu)
         {
             var temp = cpu.Y - cpu.arg;
-            cpu.C = cpu.Y >= cpu.arg ? 1 : 0;
+            cpu.C = cpu.Y >= cpu.arg ? 1U : 0;
             TestN(temp & 0xFFFF, cpu);
             TestZ(temp & 0xFFFF, cpu);
         }
@@ -577,7 +575,7 @@ namespace Fami.Core
         public static void CMP(Cpu6502State cpu)
         {
             var temp = cpu.A - cpu.arg;
-            cpu.C = cpu.A >= cpu.arg ? 1 : 0;
+            cpu.C = cpu.A >= cpu.arg ? 1U : 0;
             TestN(temp & 0xFF, cpu);
             TestZ(temp & 0xFF, cpu);
         }
@@ -642,7 +640,7 @@ namespace Fami.Core
         public static void CPX(Cpu6502State cpu)
         {
             var temp = cpu.X - cpu.arg;
-            cpu.C = cpu.X >= cpu.arg ? 1 : 0;
+            cpu.C = cpu.X >= cpu.arg ? 1U : 0U;
             TestN(temp & 0xFF, cpu);
             TestZ(temp & 0xFF, cpu);
         }
@@ -801,7 +799,7 @@ namespace Fami.Core
             cpu.Write(cpu.EffectiveAddr, temp);
             
             var temp2 = cpu.A - temp;
-            cpu.C = cpu.A >= temp ? 1 : 0;
+            cpu.C = cpu.A >= temp ? 1U : 0;
 
             TestN(temp2 & 0xFF, cpu);
             TestZ(temp2 & 0xFF, cpu);

@@ -30,19 +30,43 @@ namespace Fami.Core
             Cpu.Reset();
         }
 
+        public uint Step()
+        {
+            var cycles = 0U;
+            Cpu.Ppu.Clock();
+            if (Cpu.Ppu.cycles % 3 == 0)
+            {
+                cycles = Dispatch();
+                Cpu.cycles += cycles;
+                Cpu.instructions++;
+            }
+            return cycles;
+        }
+
         public void Execute()
         {
             try
             {
+                running = true;
                 while (running)
                 {
-                    Cpu.cycles += Dispatch();
+                    Cpu.Ppu.Clock();
+                    if (Cpu.Ppu.cycles % 3 == 0)
+                    {
+                        Cpu.cycles += Dispatch();
+                        Cpu.instructions++;
+                    }
 
                     if (Cpu.PC == 0x0001)
                     {
                         running = false;
                     }
                 }
+
+                var l = Cpu.Read(02);
+                var h = Cpu.Read(03);
+                Console.WriteLine($"{l:X2}{h:X2}h");
+
                 File.WriteAllText("fami.log", log.ToString());
             }
             catch (Exception e)
@@ -58,15 +82,16 @@ namespace Fami.Core
         /// Executes one instruction and return the number of cycles consumed
         /// </summary>
         /// <returns></returns>
-        public int Dispatch()
+        public uint Dispatch()
         {
             var lastPC = Cpu.PC;
 
             switch (Cpu.PC)
             {
-                case 0xC79B:
-                case 0xF55E:
-                case 0xFAF1:
+                case 0x8057:
+                //case 0xC79B:
+                //case 0xF55E:
+                //case 0xFAF1:
                     var x = 1;
                     break;
             }
@@ -74,7 +99,7 @@ namespace Fami.Core
             var ins = Cpu.Read(Cpu.PC);
             var bytes = Cpu6502InstructionSet.bytes[ins];
 
-            Log(bytes);
+            //Log(bytes);
 
             // This could be moved into each instruction, but we would need to implement all 255 instructions separately
             switch (Cpu6502InstructionSet.addrmodes[ins])
@@ -130,10 +155,10 @@ namespace Fami.Core
 
             Cpu6502InstructionSet.OpCodes[ins](Cpu);
 
-            if (Cpu.PC == lastPC)
-            {
-                throw new Exception("PC not updated!");
-            }
+            //if (Cpu.PC == lastPC)
+            //{
+            //    throw new Exception("PC not updated!");
+            //}
 
             var pcycles = Cpu6502InstructionSet.cycles[ins];
 
@@ -202,14 +227,15 @@ namespace Fami.Core
                 Cpu.PageBoundsCrossed = false;
             }
 
-            // Just to align with nestest.log
-            if (ins == 0xce)
+            switch (ins)
             {
-                pcycles += 3;
-            }
-            if (ins == 0xf3)
-            {
-                pcycles += 4;
+                // Just to align with nestest.log
+                case 0xce:
+                    pcycles += 3;
+                    break;
+                case 0xf3:
+                    pcycles += 4;
+                    break;
             }
 
             return pcycles;
@@ -218,7 +244,7 @@ namespace Fami.Core
         private void Log(int bytes)
         {
             var sb = new StringBuilder();
-            for (var i = 0; i < bytes; i++)
+            for (var i = 0u; i < bytes; i++)
             {
                 sb.Append($"{Cpu.Read(Cpu.PC + i):X2} ");
             }

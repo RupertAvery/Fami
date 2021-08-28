@@ -9,21 +9,21 @@
             _prgBanks = prgBanks;
         }
 
-        public override (int value, bool handled) CpuMapRead(int address)
+        public override (uint value, bool handled) CpuMapRead(uint address)
         {
             if (address >= 0x8000 && address <= 0xFFFF)
             {
-                return (address & (_prgBanks > 1 ? 0x7FFF : 0x3FFF), true);
+                return (address & (uint)(_prgBanks > 1 ? 0x7FFF : 0x3FFF), true);
             }
             return (address, false);
         }
 
-        public override (int value, bool handled) CpuMapWrite(int address)
+        public override (uint value, bool handled) CpuMapWrite(uint address)
         {
             return (address, false);
         }
 
-        public override (int value, bool handled) PpuMapRead(int address)
+        public override (uint value, bool handled) PpuMapRead(uint address)
         {
             if (address >= 0x0000 && address <= 0x1FFF)
             {
@@ -32,7 +32,7 @@
             return (address, false);
         }
 
-        public override (int value, bool handled) PpuMapWrite(int address)
+        public override (uint value, bool handled) PpuMapWrite(uint address)
         {
             return (address, false);
         }
