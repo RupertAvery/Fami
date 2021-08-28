@@ -123,7 +123,7 @@ namespace Fami
         }
 
 
-        static uint CyclesLeft;
+        static int CyclesLeft;
         static long CyclesRan;
         static Thread EmulationThread;
         static AutoResetEvent ThreadSync = new AutoResetEvent(false);
@@ -132,7 +132,7 @@ namespace Fami
         {
             try
             {
-                while (true)
+                while (running)
                 {
                     ThreadSync.WaitOne();
 
@@ -163,7 +163,7 @@ namespace Fami
             CyclesLeft += CyclesPerFrame;
             while (CyclesLeft > 0)
             {
-                CyclesLeft -= emu.Step();
+                CyclesLeft -= (int)emu.Step();
             }
         }
 
@@ -278,6 +278,8 @@ namespace Fami
                 Draw();
             }
 
+            ThreadSync.Close();
+
         }
         public static double GetTime()
         {
@@ -296,6 +298,7 @@ namespace Fami
 
         public void Dispose()
         {
+            ThreadSync.Dispose();
             Destroy();
         }
     }
