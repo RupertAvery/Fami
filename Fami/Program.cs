@@ -21,7 +21,7 @@ namespace Fami
                 uint b = 0;
 
                 //main.Test();
-                main.Load("mario.nes");
+                main.Load("nestest.nes");
                 main.Run();
             }
         }

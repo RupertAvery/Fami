@@ -77,7 +77,7 @@ namespace Fami.Core
             return handled ? (VRomBankData[mappedAddress], true) : (0u, false);
         }
 
-        public bool PpuWrite(int address, uint value)
+        public bool PpuWrite(uint address, uint value)
         {
             return false;
         }

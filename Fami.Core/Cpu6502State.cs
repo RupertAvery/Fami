@@ -58,7 +58,7 @@
         public void Init()
         {
             //Memory = new Cpu6502Memory();
-            Ppu = new Ppu();
+            Ppu = new Ppu(this);
         }
 
         public void Reset()
@@ -75,34 +75,42 @@
 
         private uint[] ram = new uint[0x800];
         private Cartridge _cart;
+        public bool NMI;
         public Ppu Ppu { get; private set; }
 
         public uint Read(uint address)
         {
+            uint data = 0;
             var (val, handled) = _cart.CpuRead(address);
             if (handled)
             {
-                return val;
+                data = val;
             }
             else if (address < 0x2000)
             {
-                return ram[address & 0x07FF];
+                data = ram[address & 0x07FF];
             }
-            else if (address <= 0x3000)
+            else if (address >= 0x2000 && address <= 0x3FFF)
             {
-                return Ppu.Read(address);
+                data = Ppu.Read(address);
             }
-
-            return 0;
+            else if (address >= 0x4016 && address <= 0x4017)
+            {
+                data = (controller_state[address & 0x0001] & 0x80) > 0 ? 1U : 0;
+                controller_state[address & 0x0001] <<= 1;
+            }
+            return data;
         }
+
+        private uint[] controller_state = new uint[2];
 
         public void Write(uint address, uint value)
         {
-            if (address < 0x2000)
+            if (address >= 0x0000 && address <= 0x1FF)
             {
                 ram[address & 0x07FF] = value;
             }
-            else if (address <= 0x3000)
+            else if (address >= 0x2000 && address <= 0x3000)
             {
                 Ppu.Write(address, value);
             }
@@ -112,6 +120,14 @@
         {
             _cart = cart;
             Ppu.LoadCartridge(cart);
+        }
+
+        public void NonMaskableInterrupt()
+        {
+            Cpu6502InstructionSet.Push(this, (PC >> 8) & 0xFF); // Push the high byte of the PC
+            Cpu6502InstructionSet.Push(this, (PC & 0xFF)); // Push the low byte of the PC
+            Cpu6502InstructionSet.Push(this, P);
+            PC = Read(0xFFFA) + Read(0xFFFB) * 0x100; // Jump to NMI handler
         }
     }
 }

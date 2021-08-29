@@ -34,12 +34,21 @@ namespace Fami.Core
         {
             var cycles = 0U;
             Cpu.Ppu.Clock();
+         
             if (Cpu.Ppu.cycles % 3 == 0)
             {
                 cycles = Dispatch();
                 Cpu.cycles += cycles;
                 Cpu.instructions++;
             }
+
+            if (Cpu.NMI)
+            {
+                Cpu.NMI = false;
+                Cpu.NonMaskableInterrupt();
+            }
+            
+            
             return cycles;
         }
 
@@ -148,6 +157,8 @@ namespace Fami.Core
                     Cpu.rel = Cpu.ReadRelative();
                     break;
                 default:
+                    //File.WriteAllText("mario.log", log.ToString());
+
                     throw new NotImplementedException();
             }
 

@@ -183,14 +183,14 @@ namespace Fami.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void Push(Cpu6502State cpu, uint value)
+        public static void Push(Cpu6502State cpu, uint value)
         {
             cpu.Write(cpu.S + 0x100, value);
             cpu.S -= 1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static uint Pop(Cpu6502State cpu)
+        public static uint Pop(Cpu6502State cpu)
         {
             cpu.S += 1;
             return cpu.Read(cpu.S + 0x100);
@@ -584,10 +584,7 @@ namespace Fami.Core
         public static void DEC(Cpu6502State cpu)
         {
             var temp = cpu.arg - 1;
-            if (temp < 0x00)
-            {
-                temp = temp & 0xff;
-            }
+            temp &= 0xff;
 
             TestN(temp, cpu);
             TestZ(temp, cpu);
@@ -612,10 +609,7 @@ namespace Fami.Core
         public static void DEX(Cpu6502State cpu)
         {
             cpu.X -= 1;
-            if (cpu.X < 0x00)
-            {
-                cpu.X = 0xFF;
-            }
+            cpu.X &= 0xFF;
             TestN(cpu.X, cpu);
             TestZ(cpu.X, cpu);
         }
