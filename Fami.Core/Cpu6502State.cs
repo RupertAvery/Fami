@@ -107,7 +107,12 @@
 
         public void Write(uint address, uint value)
         {
-            if (address >= 0x0000 && address <= 0x1FFF)
+            var handled = _cart.CpuWrite(address, value);
+            if (handled)
+            {
+
+            }
+            else if (address >= 0x0000 && address <= 0x1FFF)
             {
                 ram[address & 0x07FF] = value;
             }

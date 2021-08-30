@@ -22,12 +22,18 @@ namespace Fami.Core
         public byte Region { get; private set; }
         public byte[] RomBankData { get; private set; }
         public byte[] VRomBankData { get; private set; }
+        public byte[] RamBankData { get; private set; }
         public byte[] SaveRamData { get; private set; }
         public BaseMapper Mapper { get; private set; }
         public MirrorEnum Mirror { get;set;}
+
         public Cartridge()
         {
 
+        }
+
+        public void Reset()
+        {
         }
 
         public static Cartridge Load(string path)
@@ -35,7 +41,7 @@ namespace Fami.Core
             using (var f = new FileStream(path, FileMode.Open, FileAccess.Read))
             {
                 var r = new BinaryReader(f);
-                r.ReadBytes(4);
+                var header = r.ReadBytes(4);
                 var h = new Cartridge();
                 h.RomBanks = r.ReadByte();
                 h.RomBankData = new byte[h.RomBanks * ROMBANK_SIZE];
@@ -49,12 +55,14 @@ namespace Fami.Core
                 h.RomBankData = r.ReadBytes(h.RomBanks * ROMBANK_SIZE);
                 h.VRomBankData = r.ReadBytes(h.VRomBanks * VROMBANK_SIZE);
                 h.Mirror = (MirrorEnum)(h.Flags6 & 0x01);
+                h.RamBankData = new byte[8192];
 
                 var mapperId = ((h.Flags6 >> 4) & 0x0F) | (h.Flags7 & 0xF0);
                 h.Mapper = mapperId switch
                 {
-                    0 => new Mapper000(h.RomBanks),
-                    _ => new Mapper000(h.RomBanks)
+                    0 => new Mapper000(h),
+                    2 => new Mapper002(h),
+                    _ => new Mapper000(h)
                 };
                 return h;
             }
@@ -62,26 +70,22 @@ namespace Fami.Core
 
         public (uint value, bool handled) CpuRead(uint address)
         {
-            var (mappedAddress, handled) = Mapper.CpuMapRead(address);
-
-            return handled ? ((uint)RomBankData[mappedAddress], true) : (0, false);
+            return Mapper.CpuMapRead(address);
         }
 
         public bool CpuWrite(uint address, uint value)
         {
-            return false;
+            return Mapper.CpuMapWrite(address, value);
         }
 
         public (uint value, bool handled) PpuRead(uint address)
         {
-            var (mappedAddress, handled) = Mapper.PpuMapRead(address);
-
-            return handled ? (VRomBankData[mappedAddress], true) : (0u, false);
+            return Mapper.PpuMapRead(address);
         }
 
         public bool PpuWrite(uint address, uint value)
         {
-            return false;
+            return Mapper.PpuMapWrite(address, value);
         }
     }
 }

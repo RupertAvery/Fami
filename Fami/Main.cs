@@ -135,9 +135,7 @@ namespace Fami
                 while (running)
                 {
                     ThreadSync.WaitOne();
-
                     RunFrame();
-
                     //while (!Sync)
                     //{
                     //    RunFrame();
@@ -158,8 +156,9 @@ namespace Fami
         //public const int CyclesPerFrame = 27756;
         //public const int CyclesPerFrame = 27756;
         public const int CyclesPerFrame = 89341;
-        const double SecondsPerFrame = 1D / (5369318D / 89341D);
-        //private const double SecondsPerFrame = 1 / 59.97D;
+        //const double SecondsPerFrame = 1D / (5369318D / 89341D);
+        private const double SecondsPerFrame = 1 / 59.97D;
+        private double Fps;
 
         public void RunFrame()
         {
@@ -199,6 +198,15 @@ namespace Fami
             running = true;
 
             var nextFrameAt = GetTime();
+            double fpsEvalTimer = 0;
+
+            void resetTimers()
+            {
+                var time = GetTime();
+                nextFrameAt = time;
+                fpsEvalTimer = time;
+            }
+            resetTimers();
 
             while (running)
             {
@@ -259,24 +267,23 @@ namespace Fami
                     ThreadSync.Set();
                 }
 
-                //if (currentSec >= fpsEvalTimer)
-                //{
-                //    double diff = currentSec - fpsEvalTimer + 1;
-                //    double frames = CyclesRan / CyclesPerFrameGba;
-                //    CyclesRan = 0;
+                if (currentSec >= fpsEvalTimer)
+                {
+                    double diff = currentSec - fpsEvalTimer + 1;
+                    double frames = CyclesRan / CyclesPerFrame;
+                    CyclesRan = 0;
 
-                //    double mips = (double)Gba.Cpu.InstructionsRan / 1000000D;
-                //    Gba.Cpu.InstructionsRan = 0;
+                    //double mips = (double)Gba.Cpu.InstructionsRan / 1000000D;
+                    //Gba.Cpu.InstructionsRan = 0;
 
-                //    // Use Math.Floor to truncate to 2 decimal places
-                //    Fps = Math.Floor((frames / diff) * 100) / 100;
-                //    Mips = Math.Floor((mips / diff) * 100) / 100;
-                //    UpdateTitle();
-                //    Seconds++;
-                //    UpdatePlayingRpc();
+                    // Use Math.Floor to truncate to 2 decimal places
+                    Fps = Math.Floor((frames / diff) * 100) / 100;
+                    //Mips = Math.Floor((mips / diff) * 100) / 100;
+                    UpdateTitle();
+                    //Seconds++;
 
-                //    fpsEvalTimer += 1;
-                //}
+                    fpsEvalTimer += 1;
+                }
 
                 Draw();
             }
@@ -284,6 +291,15 @@ namespace Fami
             ThreadSync.Close();
 
         }
+
+        private void UpdateTitle()
+        {
+            SDL_SetWindowTitle(
+                Window,
+                "Fami - " + Fps + " fps"
+            );
+        }
+
         private uint controller1state = 0;
 
         private void KeyEvent(SDL_KeyboardEvent evtKey)
@@ -317,6 +333,9 @@ namespace Fami
                         break;
                     case SDL_Keycode.SDLK_x:
                         controller1state |= 0x40U;
+                        break;
+                    case SDL_Keycode.SDLK_ESCAPE:
+                        emu.Reset();
                         break;
                 }
             }

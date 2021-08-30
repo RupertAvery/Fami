@@ -15,7 +15,7 @@ namespace Fami.Core
     public class Ppu
     {
         private readonly Cpu6502State _state;
-        
+
         private StatusRegister ppu_status = new();
         private ControlRegister ppu_control = new();
         private MaskRegister ppu_mask = new();
@@ -32,7 +32,6 @@ namespace Fami.Core
         private const uint PPUSCROLL = 0x2005;
         private const uint PPUADDR = 0x2006;
         private const uint PPUDATA = 0x2007;
-
         private const uint OAMDMA = 0x4014;
 
         private uint bg_shifter_pattern_lo;
@@ -42,8 +41,9 @@ namespace Fami.Core
         private uint bg_shifter_attrib_lo;
         private uint bg_shifter_attrib_hi;
         private uint bg_next_tile_attrib;
-
         private uint bg_next_tile_id;
+        private uint address_latch;
+        private uint ppu_data_buffer;
 
         // 341 ppuccs = 1 scanline
         // 262 scanlines = 1 frame
@@ -214,8 +214,6 @@ namespace Fami.Core
             }
         }
 
-        private uint address_latch;
-        private uint ppu_data_buffer;
 
         public uint Read(uint address)
         {
@@ -260,6 +258,17 @@ namespace Fami.Core
         {
             cycle = 0;
             cycles = 0;
+            bg_shifter_pattern_lo = 0;
+            bg_next_tile_lsb = 0;
+            bg_shifter_pattern_hi = 0;
+            bg_next_tile_msb = 0;
+            bg_shifter_attrib_lo = 0;
+            bg_shifter_attrib_hi = 0;
+            bg_next_tile_attrib = 0;
+            bg_next_tile_id = 0;
+            address_latch = 0;
+            ppu_data_buffer = 0;
+            oam_addr = 0;
             scanline = -1;
         }
 
@@ -411,7 +420,7 @@ namespace Fami.Core
                         // Leaving nametable so wrap address round
                         vram_addr.CoarseX = 0;
                         // Flip target nametable bit
-                        vram_addr.NametableX = vram_addr.NametableX == 0 ? (uint) 1 : (uint) 0;
+                        vram_addr.NametableX = vram_addr.NametableX == 0 ? (uint)1 : (uint)0;
                     }
                     else
                     {
@@ -675,7 +684,7 @@ namespace Fami.Core
                             // All attribute memory begins at 0x03C0 within a nametable, so OR with
                             // result to select target nametable, and attribute byte offset. Finally
                             // OR with 0x2000 to offset into nametable address space on PPU bus.				
-                            bg_next_tile_attrib = PpuRead(0x23C0 | (vram_addr.NametableY  << 11)
+                            bg_next_tile_attrib = PpuRead(0x23C0 | (vram_addr.NametableY << 11)
                                                                  | (vram_addr.NametableX << 10)
                                                                  | ((vram_addr.CoarseY >> 2) << 3)
                                                                  | (vram_addr.CoarseX >> 2));
@@ -995,7 +1004,7 @@ namespace Fami.Core
                     sprite_shifter_pattern_hi[i] = sprite_pattern_bits_hi;
                 }
             }
-        
+
 
 
             if (scanline == 240)
@@ -1059,7 +1068,7 @@ namespace Fami.Core
             uint fg_pixel = 0x00;   // The 2-bit pixel to be rendered
             uint fg_palette = 0x00; // The 3-bit index of the palette the pixel indexes
             uint fg_priority = 0x00;// A bit of the sprite attribute indicates if its
-                                       // more important than the background
+                                    // more important than the background
             if (ppu_mask.RenderSprites == 1)
             {
                 // Iterate through all sprites for this scanline. This is to maintain

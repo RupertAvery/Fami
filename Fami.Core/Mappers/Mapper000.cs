@@ -2,39 +2,43 @@
 {
     public class Mapper000 : BaseMapper
     {
+        private readonly Cartridge _cartridge;
         private readonly int _prgBanks;
 
-        public Mapper000(int prgBanks)
+        public Mapper000(Cartridge cartridge)
         {
-            _prgBanks = prgBanks;
+            _cartridge = cartridge;
+            _prgBanks = cartridge.RomBanks;
         }
 
         public override (uint value, bool handled) CpuMapRead(uint address)
         {
             if (address >= 0x8000 && address <= 0xFFFF)
             {
-                return (address & (uint)(_prgBanks > 1 ? 0x7FFF : 0x3FFF), true);
+                var mappedAddress = address & (uint)(_prgBanks > 1 ? 0x7FFF : 0x3FFF);
+                return (_cartridge.RomBankData[mappedAddress], true);
             }
-            return (address, false);
+            return (0, false);
         }
 
-        public override (uint value, bool handled) CpuMapWrite(uint address)
+        public override bool CpuMapWrite(uint address, uint value)
         {
-            return (address, false);
+            return false;
         }
 
         public override (uint value, bool handled) PpuMapRead(uint address)
         {
             if (address >= 0x0000 && address <= 0x1FFF)
             {
-                return (address, true);
+                return (_cartridge.VRomBankData[address], true);
             }
-            return (address, false);
+            return (0, false);
         }
 
-        public override (uint value, bool handled) PpuMapWrite(uint address)
+        public override bool PpuMapWrite(uint address, uint value)
         {
-            return (address, false);
+            return false;
         }
+
     }
 }
