@@ -13,8 +13,8 @@
                 (uint)(
                     (N << 7) +
                     (V << 6) +
-                    (B2 << 5) +
-                    (B1 << 4) +
+                    (U << 5) +
+                    (B << 4) +
                     (D << 3) +
                     (I << 2) +
                     (Z << 1) +
@@ -24,8 +24,8 @@
             {
                 N = (value >> 7 & 1);
                 V = (value >> 6 & 1);
-                B2 = (value >> 5 & 1);
-                B1 = (value >> 4 & 1);
+                U = (value >> 5 & 1);
+                B = (value >> 4 & 1);
                 D = (value >> 3 & 1);
                 I = (value >> 2 & 1);
                 Z = (value >> 1 & 1);
@@ -37,21 +37,21 @@
 
         //public Cpu6502Memory Memory { get; set; }
 
-        public uint N { get; set; }
-        public uint V { get; set; }
-        public uint B2 { get; set; }
-        public uint B1 { get; set; }
-        public uint D { get; set; }
-        public uint I { get; set; }
-        public uint Z { get; set; }
-        public uint C { get; set; }
+        public uint N { get; set; }  // bit 7
+        public uint V { get; set; }  // bit 6
+        public uint U { get; set; }  // bit 5
+        public uint B { get; set; }  // bit 4
+        public uint D { get; set; }  // bit 3
+        public uint I { get; set; }  // bit 2
+        public uint Z { get; set; }  // bit 1
+        public uint C { get; set; }  // bit 0
 
         public uint EffectiveAddr { get; set; }
         public bool PageBoundsCrossed { get; set; }
         public bool Branched { get; set; }
 
-        public sbyte rel;
-        public uint arg;
+        //public sbyte rel;
+        //public uint arg;
         public uint cycles;
         public uint instructions;
 
@@ -106,7 +106,7 @@
 
         public void Write(uint address, uint value)
         {
-            if (address >= 0x0000 && address <= 0x1FF)
+            if (address >= 0x0000 && address <= 0x1FFF)
             {
                 ram[address & 0x07FF] = value;
             }
@@ -122,12 +122,17 @@
             Ppu.LoadCartridge(cart);
         }
 
-        public void NonMaskableInterrupt()
+        public uint NonMaskableInterrupt()
         {
             Cpu6502InstructionSet.Push(this, (PC >> 8) & 0xFF); // Push the high byte of the PC
             Cpu6502InstructionSet.Push(this, (PC & 0xFF)); // Push the low byte of the PC
+
+            B = 0;
+            U = 1;
+            I = 1;
             Cpu6502InstructionSet.Push(this, P);
             PC = Read(0xFFFA) + Read(0xFFFB) * 0x100; // Jump to NMI handler
+            return 8;
         }
     }
 }

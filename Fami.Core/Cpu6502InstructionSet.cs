@@ -91,13 +91,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void TestN(uint value, Cpu6502State cpu)
         {
-            cpu.N = (value & 0b10000000) >> 7;
+            cpu.N = (value >> 7) & 1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void TestV(uint value, Cpu6502State cpu)
         {
-            cpu.V = (value & 0b01000000) >> 6;
+            cpu.V = (value >> 6) & 1;
         }
 
 
@@ -106,13 +106,6 @@ namespace Fami.Core
         {
             cpu.Z = (value == 0b00000000) ? 1U : 0U;
         }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void SetC(uint value, Cpu6502State cpu)
-        {
-            cpu.C = value;
-        }
-
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void BRK(Cpu6502State cpu)
@@ -128,7 +121,8 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ORA(Cpu6502State cpu)
         {
-            cpu.A = cpu.arg | cpu.A;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            cpu.A = arg | cpu.A;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -136,7 +130,8 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void AND(Cpu6502State cpu)
         {
-            cpu.A = cpu.arg & cpu.A;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            cpu.A = arg & cpu.A;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -155,13 +150,14 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ASL_Mem(Cpu6502State cpu)
         {
-            cpu.arg = cpu.arg << 1;
-            cpu.C = (cpu.arg >> 8) & 1;
-            cpu.arg = cpu.arg & 0xFF;
-            TestN(cpu.arg, cpu);
-            TestZ(cpu.arg, cpu);
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            arg = arg << 1;
+            cpu.C = (arg >> 8) & 1;
+            arg = arg & 0xFF;
+            TestN(arg, cpu);
+            TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.Write(cpu.EffectiveAddr, arg);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -218,9 +214,10 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void BIT(Cpu6502State cpu)
         {
-            TestN(cpu.arg, cpu);
-            TestV(cpu.arg, cpu);
-            TestZ(cpu.A & cpu.arg, cpu);
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            TestN(arg, cpu);
+            TestV(arg, cpu);
+            TestZ(cpu.A & arg, cpu);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -236,12 +233,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ROL_Mem(Cpu6502State cpu)
         {
+            var arg = cpu.Read(cpu.EffectiveAddr);
             var temp = cpu.C;
-            cpu.C = (cpu.arg >> 7) & 1;
-            cpu.arg = ((cpu.arg << 1) | temp & 1) & 0xFF;
-            TestN(cpu.arg, cpu);
-            TestZ(cpu.arg, cpu);
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.C = (arg >> 7) & 1;
+            arg = ((arg << 1) | temp & 1) & 0xFF;
+            TestN(arg, cpu);
+            TestZ(arg, cpu);
+            cpu.Write(cpu.EffectiveAddr, arg);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -252,6 +250,8 @@ namespace Fami.Core
             //cpu.P = Pop(cpu) | 0b00100000;
             //cpu.P = Pop(cpu) | 0b00110000;
             cpu.P = Pop(cpu);
+            cpu.B = 0;
+            cpu.U = 1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -274,7 +274,9 @@ namespace Fami.Core
         public static void RTI(Cpu6502State cpu)
         {
             //The status register is pulled with the break flag and bit 5 ignored.
-            cpu.P = Pop(cpu) & 0b11001111 | 0b00100000;
+            cpu.P = Pop(cpu);
+            cpu.B = 0;
+            cpu.U = 1;   // FCEUX sets this bit to 1 on RTI?
             // Then PC is pulled from the stack.
             cpu.PC = Pop(cpu);
             cpu.PC += Pop(cpu) * 0x100;
@@ -284,7 +286,8 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void EOR(Cpu6502State cpu)
         {
-            cpu.A ^= cpu.arg;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            cpu.A ^= arg;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -301,12 +304,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LSR_Mem(Cpu6502State cpu)
         {
-            cpu.C = cpu.arg & 1;
-            cpu.arg = (cpu.arg >> 1) & 0xFF;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            cpu.C = arg & 1;
+            arg = (arg >> 1) & 0xFF;
             cpu.N = 0;
-            TestZ(cpu.arg, cpu);
+            TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.Write(cpu.EffectiveAddr, arg);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -355,11 +359,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ADC(Cpu6502State cpu)
         {
-            var temp = cpu.arg + cpu.A + cpu.C;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+
+            var temp = arg + cpu.A + cpu.C;
 
             // Stolen from FCEUX
             // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-            cpu.V = ((((cpu.A ^ cpu.arg) & 0x80) ^ 0x80) & ((cpu.A ^ temp) & 0x80)) >> 7 & 1;
+            cpu.V = ((((cpu.A ^ arg) & 0x80) ^ 0x80) & ((cpu.A ^ temp) & 0x80)) >> 7 & 1;
             cpu.C = (temp >> 8) & 1;
 
             cpu.A = (byte)(temp & 0xFF);
@@ -380,12 +386,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ROR_Mem(Cpu6502State cpu)
         {
+            var arg = cpu.Read(cpu.EffectiveAddr);
             var temp = cpu.C;
-            cpu.C = cpu.arg & 1;
-            cpu.arg = ((cpu.arg >> 1) | temp << 7) & 0xFF;
-            TestN(cpu.arg, cpu);
-            TestZ(cpu.arg, cpu);
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.C = arg & 1;
+            arg = ((arg >> 1) | temp << 7) & 0xFF;
+            TestN(arg, cpu);
+            TestZ(arg, cpu);
+            cpu.Write(cpu.EffectiveAddr, arg);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -477,7 +484,8 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LDY(Cpu6502State cpu)
         {
-            cpu.Y = cpu.arg;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            cpu.Y = arg;
             TestN(cpu.Y, cpu);
             TestZ(cpu.Y, cpu);
         }
@@ -485,7 +493,8 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LDA(Cpu6502State cpu)
         {
-            cpu.A = cpu.arg & 0xFF;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            cpu.A = arg & 0xFF;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -493,7 +502,8 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LDX(Cpu6502State cpu)
         {
-            cpu.X = cpu.arg;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            cpu.X = arg;
             TestN(cpu.X, cpu);
             TestZ(cpu.X, cpu);
         }
@@ -527,14 +537,19 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint GetRel(Cpu6502State cpu)
         {
+            var rel = cpu.Read(cpu.EffectiveAddr);
+            if ((rel & 0x80) == 0x80)
+            {
+                rel |= 0xFFFFFF80;
+            }
             var x = cpu.PC >> 8;
-            var y = (cpu.PC + cpu.rel) >> 8;
+            var y = (cpu.PC + (int)rel) >> 8;
 
             if (x != y)
             {
                 cpu.PageBoundsCrossed = true;
             }
-            var temp = cpu.PC + cpu.rel;
+            var temp = cpu.PC + (int)rel;
             switch (temp)
             {
                 case > 0xFFFF:
@@ -565,8 +580,9 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void CPY(Cpu6502State cpu)
         {
-            var temp = cpu.Y - cpu.arg;
-            cpu.C = cpu.Y >= cpu.arg ? 1U : 0;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            var temp = cpu.Y - arg;
+            cpu.C = cpu.Y >= arg ? 1U : 0;
             TestN(temp & 0xFFFF, cpu);
             TestZ(temp & 0xFFFF, cpu);
         }
@@ -574,8 +590,9 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void CMP(Cpu6502State cpu)
         {
-            var temp = cpu.A - cpu.arg;
-            cpu.C = cpu.A >= cpu.arg ? 1U : 0;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            var temp = cpu.A - arg;
+            cpu.C = cpu.A >= arg ? 1U : 0;
             TestN(temp & 0xFF, cpu);
             TestZ(temp & 0xFF, cpu);
         }
@@ -583,7 +600,8 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DEC(Cpu6502State cpu)
         {
-            var temp = cpu.arg - 1;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            var temp = arg - 1;
             temp &= 0xff;
 
             TestN(temp, cpu);
@@ -633,8 +651,9 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void CPX(Cpu6502State cpu)
         {
-            var temp = cpu.X - cpu.arg;
-            cpu.C = cpu.X >= cpu.arg ? 1U : 0U;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            var temp = cpu.X - arg;
+            cpu.C = cpu.X >= arg ? 1U : 0U;
             TestN(temp & 0xFF, cpu);
             TestZ(temp & 0xFF, cpu);
         }
@@ -642,11 +661,12 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SBC(Cpu6502State cpu)
         {
-            var temp = cpu.A - cpu.arg - ((cpu.C ^ 1) & 1);
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            var temp = cpu.A - arg - ((cpu.C ^ 1) & 1);
 
             // Stolen from FCEUX
             // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-            cpu.V = ((cpu.A ^ temp) & (cpu.A ^ cpu.arg) & 0x80) >> 7 & 1;
+            cpu.V = ((cpu.A ^ temp) & (cpu.A ^ arg) & 0x80) >> 7 & 1;
             cpu.C = (temp >> 8) & 1 ^ 1;
 
             cpu.A = (byte)(temp & 0xFF);
@@ -657,15 +677,16 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void INC(Cpu6502State cpu)
         {
-            cpu.arg += 1;
-            if (cpu.arg > 0xff)
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            arg += 1;
+            if (arg > 0xff)
             {
-                cpu.arg = 0x00;
+                arg = 0x00;
             }
-            TestN(cpu.arg, cpu);
-            TestZ(cpu.arg, cpu);
+            TestN(arg, cpu);
+            TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.Write(cpu.EffectiveAddr, arg);
 
         }
 
@@ -712,15 +733,16 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SLO(Cpu6502State cpu)
         {
-            cpu.arg = cpu.arg << 1;
-            cpu.C = (cpu.arg >> 8) & 1;
-            cpu.arg = cpu.arg & 0xFF;
-            //TestN(cpu.arg, cpu);
-            //TestZ(cpu.arg, cpu);
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            arg = arg << 1;
+            cpu.C = (arg >> 8) & 1;
+            arg = arg & 0xFF;
+            //TestN(arg, cpu);
+            //TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.Write(cpu.EffectiveAddr, arg);
 
-            cpu.A = cpu.arg | cpu.A;
+            cpu.A = arg | cpu.A;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -728,14 +750,15 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SRE(Cpu6502State cpu)
         {
-            cpu.C = cpu.arg & 1;
-            cpu.arg = (cpu.arg >> 1) & 0xFF;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            cpu.C = arg & 1;
+            arg = (arg >> 1) & 0xFF;
             //cpu.N = 0;
-            //TestZ(cpu.arg, cpu);
+            //TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.Write(cpu.EffectiveAddr, arg);
 
-            cpu.A ^= cpu.arg;
+            cpu.A ^= arg;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -743,12 +766,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void USB(Cpu6502State cpu)
         {
+            var arg = cpu.Read(cpu.EffectiveAddr);
             // Technically the same as SBC Immediate/E9
-            var temp = cpu.A - cpu.arg - ((cpu.C ^ 1) & 1);
+            var temp = cpu.A - arg - ((cpu.C ^ 1) & 1);
 
             // Stolen from FCEUX
             // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-            cpu.V = ((cpu.A ^ temp) & (cpu.A ^ cpu.arg) & 0x80) >> 7 & 1;
+            cpu.V = ((cpu.A ^ temp) & (cpu.A ^ arg) & 0x80) >> 7 & 1;
             cpu.C = (temp >> 8) & 1 ^ 1;
 
             cpu.A = (byte)(temp & 0xFF);
@@ -765,8 +789,9 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LAX(Cpu6502State cpu)
         {
-            cpu.A = cpu.arg;
-            cpu.X = cpu.arg;
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            cpu.A = arg;
+            cpu.X = arg;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
@@ -781,17 +806,15 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void DCP(Cpu6502State cpu)
         {
-            var temp = cpu.arg - 1;
-            if (temp < 0x00)
-            {
-                temp = temp & 0xff;
-            }
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            var temp = arg - 1;
+            temp &= 0xff;
 
             //TestN(temp, cpu);
             //TestZ(temp, cpu);
 
             cpu.Write(cpu.EffectiveAddr, temp);
-            
+
             var temp2 = cpu.A - temp;
             cpu.C = cpu.A >= temp ? 1U : 0;
 
@@ -802,21 +825,22 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ISC(Cpu6502State cpu)
         {
-            cpu.arg += 1;
-            if (cpu.arg > 0xff)
+            var arg = cpu.Read(cpu.EffectiveAddr);
+            arg += 1;
+            if (arg > 0xff)
             {
-                cpu.arg = 0x00;
+                arg = 0x00;
             }
-            //TestN(cpu.arg, cpu);
-            //TestZ(cpu.arg, cpu);
+            //TestN(arg, cpu);
+            //TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.Write(cpu.EffectiveAddr, arg);
 
-            var temp = cpu.A - cpu.arg - ((cpu.C ^ 1) & 1);
+            var temp = cpu.A - arg - ((cpu.C ^ 1) & 1);
 
             // Stolen from FCEUX
             // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-            cpu.V = ((cpu.A ^ temp) & (cpu.A ^ cpu.arg) & 0x80) >> 7 & 1;
+            cpu.V = ((cpu.A ^ temp) & (cpu.A ^ arg) & 0x80) >> 7 & 1;
             cpu.C = (temp >> 8) & 1 ^ 1;
 
             cpu.A = (byte)(temp & 0xFF);
@@ -827,18 +851,19 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void RLA(Cpu6502State cpu)
         {
+            var arg = cpu.Read(cpu.EffectiveAddr);
             var temp = cpu.C;
-            cpu.C = (cpu.arg >> 7) & 1;
-            cpu.arg = ((cpu.arg << 1) | temp & 1) & 0xFF;
-            //TestN(cpu.arg, cpu);
-            //TestZ(cpu.arg, cpu);
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.C = (arg >> 7) & 1;
+            arg = ((arg << 1) | temp & 1) & 0xFF;
+            //TestN(arg, cpu);
+            //TestZ(arg, cpu);
+            cpu.Write(cpu.EffectiveAddr, arg);
 
-            cpu.A = cpu.arg & cpu.A;
+            cpu.A = arg & cpu.A;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ANC(Cpu6502State cpu)
         {
@@ -850,22 +875,23 @@ namespace Fami.Core
         {
             throw new NotImplementedException();
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void RRA(Cpu6502State cpu)
         {
+            var arg = cpu.Read(cpu.EffectiveAddr);
             var temp = cpu.C;
-            cpu.C = cpu.arg & 1;
-            cpu.arg = ((cpu.arg >> 1) | temp << 7) & 0xFF;
-            //TestN(cpu.arg, cpu);
-            //TestZ(cpu.arg, cpu);
-            cpu.Write(cpu.EffectiveAddr, cpu.arg);
+            cpu.C = arg & 1;
+            arg = ((arg >> 1) | temp << 7) & 0xFF;
+            //TestN(arg, cpu);
+            //TestZ(arg, cpu);
+            cpu.Write(cpu.EffectiveAddr, arg);
 
-            var temp2 = cpu.arg + cpu.A + cpu.C;
+            var temp2 = arg + cpu.A + cpu.C;
 
             // Stolen from FCEUX
             // http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
-            cpu.V = ((((cpu.A ^ cpu.arg) & 0x80) ^ 0x80) & ((cpu.A ^ temp2) & 0x80)) >> 7 & 1;
+            cpu.V = ((((cpu.A ^ arg) & 0x80) ^ 0x80) & ((cpu.A ^ temp2) & 0x80)) >> 7 & 1;
             cpu.C = (temp2 >> 8) & 1;
 
             cpu.A = (byte)(temp2 & 0xFF);
@@ -914,7 +940,7 @@ namespace Fami.Core
         {
             throw new NotImplementedException();
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void SBX(Cpu6502State cpu)
         {

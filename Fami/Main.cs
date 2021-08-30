@@ -155,6 +155,7 @@ namespace Fami
 
         //1.662607MHz = 1662607Hz
         //1662607Hz/59.9Hz = 27756cycles/frame
+        //public const int CyclesPerFrame = 27756;
         public const int CyclesPerFrame = 27756;
 
         public void RunFrame()

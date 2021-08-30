@@ -21,8 +21,8 @@
                     ((RenderSpritesleft & 0b1) << 2) +
                     ((RenderBackground & 0b1) << 3) +
                     ((RenderSprites & 0b1) << 4) +
-                    ((EnhanceRed & 0b1) << 6) +
-                    ((EnhanceGreen & 0b1) << 7) +
+                    ((EnhanceRed & 0b1) << 5) +
+                    ((EnhanceGreen & 0b1) << 6) +
                     ((EnhanceBlue & 0b1) << 7)
                     ;
             }

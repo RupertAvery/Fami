@@ -5,8 +5,8 @@ namespace Fami.Core
 {
     public enum MirrorEnum
     {
-        Vertical,
-        Horizontal,
+        Horizontal = 0,
+        Vertical = 1,
     }
 
     public class Cartridge
@@ -48,11 +48,13 @@ namespace Fami.Core
                 r.ReadBytes(6);
                 h.RomBankData = r.ReadBytes(h.RomBanks * ROMBANK_SIZE);
                 h.VRomBankData = r.ReadBytes(h.VRomBanks * VROMBANK_SIZE);
+                h.Mirror = (MirrorEnum)(h.Flags6 & 0x01);
+
                 var mapperId = ((h.Flags6 >> 4) & 0x0F) | (h.Flags7 & 0xF0);
                 h.Mapper = mapperId switch
                 {
                     0 => new Mapper000(h.RomBanks),
-                    _ => h.Mapper
+                    _ => new Mapper000(h.RomBanks)
                 };
                 return h;
             }

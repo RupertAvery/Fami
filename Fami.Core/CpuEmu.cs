@@ -45,17 +45,20 @@ namespace Fami.Core
             if (Cpu.NMI)
             {
                 Cpu.NMI = false;
-                Cpu.NonMaskableInterrupt();
+                Cpu.cycles += Cpu.NonMaskableInterrupt();
             }
             
             
             return cycles;
         }
 
+        private bool Debug { get; set; }
+
         public void Execute()
         {
             try
             {
+                Debug = true;
                 running = true;
                 while (running)
                 {
@@ -65,6 +68,22 @@ namespace Fami.Core
                         Cpu.cycles += Dispatch();
                         Cpu.instructions++;
                     }
+
+                    //if (Cpu.cycles % 1000 == 0)
+                    //{
+
+                    //    var sb = new StringBuilder();
+                    //    uint i = 0;
+                    //    var chr = Cpu.Read(0x6000);
+                    //    while (chr != 0)
+                    //    {
+                    //        sb.Append((char)chr);
+                    //        i++;
+                    //        chr = Cpu.Read(0x6000 + i);
+                    //    }
+
+                    //    Console.WriteLine(sb.ToString());
+                    //}
 
                     if (Cpu.PC == 0x0001)
                     {
@@ -97,7 +116,10 @@ namespace Fami.Core
 
             switch (Cpu.PC)
             {
-                case 0x8057:
+                //case 0xC6BC:
+                //case 0xE928:
+                case 0x8EB9:
+                //case 0xFA4D:
                 //case 0xC79B:
                 //case 0xF55E:
                 //case 0xFAF1:
@@ -108,7 +130,10 @@ namespace Fami.Core
             var ins = Cpu.Read(Cpu.PC);
             var bytes = Cpu6502InstructionSet.bytes[ins];
 
-            //Log(bytes);
+            //if (Debug)
+            //{
+            //    Log(bytes);
+            //}
 
             // This could be moved into each instruction, but we would need to implement all 255 instructions separately
             switch (Cpu6502InstructionSet.addrmodes[ins])
@@ -117,44 +142,44 @@ namespace Fami.Core
                 case Cpu6502InstructionSet.IMP:
                     break;
                 case Cpu6502InstructionSet.IMM:
-                    Cpu.arg = Cpu.ReadImmediate();
+                    Cpu.AddrModeImmediate();
                     break;
                 case Cpu6502InstructionSet.DP_:
-                    Cpu.arg = Cpu.ReadZeroPage();
+                    Cpu.AddrModeZeroPage();
                     break;
                 case Cpu6502InstructionSet.DPX:
-                    Cpu.arg = Cpu.ReadZeroPageX();
+                    Cpu.AddrModeZeroPageX();
                     break;
                 case Cpu6502InstructionSet.DPY:
-                    Cpu.arg = Cpu.ReadZeroPageY();
+                    Cpu.AddrModeZeroPageY();
                     break;
                 case Cpu6502InstructionSet.IND:
                     if (ins == 0x6c)
                     {
-                        Cpu.arg = Cpu.ReadIndirect_JMP();
+                        Cpu.AddrModeIndirect_JMP();
                     }
                     else
                     {
-                        Cpu.arg = Cpu.ReadIndirect();
+                        Cpu.AddrModeIndirect();
                     }
                     break;
                 case Cpu6502InstructionSet.IDX:
-                    Cpu.arg = Cpu.ReadIndirectX();
+                    Cpu.AddrModeIndirectX();
                     break;
                 case Cpu6502InstructionSet.IDY:
-                    Cpu.arg = Cpu.ReadIndirectY();
+                    Cpu.AddrModeIndirectY();
                     break;
                 case Cpu6502InstructionSet.ABS:
-                    Cpu.arg = Cpu.ReadAbsolute();
+                    Cpu.AddrModeAbsolute();
                     break;
                 case Cpu6502InstructionSet.ABX:
-                    Cpu.arg = Cpu.ReadAbsoluteX();
+                    Cpu.AddrModeAbsoluteX();
                     break;
                 case Cpu6502InstructionSet.ABY:
-                    Cpu.arg = Cpu.ReadAbsoluteY();
+                    Cpu.AddrModeAbsoluteY();
                     break;
                 case Cpu6502InstructionSet.REL:
-                    Cpu.rel = Cpu.ReadRelative();
+                    Cpu.AddrModeRelative();
                     break;
                 default:
                     //File.WriteAllText("mario.log", log.ToString());
