@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Fami": {
+      "commandName": "Project",
+      "commandLineArgs": "\"D:\\roms\\NES\\The Legend of Zelda.zip\""
+    }
+  }
+}

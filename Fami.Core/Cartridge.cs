@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using Fami.Core.Mappers;
 
 namespace Fami.Core
@@ -11,6 +12,7 @@ namespace Fami.Core
 
     public class Cartridge
     {
+        public Cpu6502State Cpu { get; }
         private const int ROMBANK_SIZE = 16384;
         private const int VROMBANK_SIZE = 8192;
 
@@ -27,44 +29,56 @@ namespace Fami.Core
         public BaseMapper Mapper { get; private set; }
         public MirrorEnum Mirror { get;set;}
 
-        public Cartridge()
+        public Cartridge(Cpu6502State cpu)
         {
-
+            Cpu = cpu;
         }
 
         public void Reset()
         {
         }
 
-        public static Cartridge Load(string path)
+        public static Cartridge Load(Stream stream, Cpu6502State cpu)
+        {
+            var r = new BinaryReader(stream);
+            var header = r.ReadBytes(4);
+            var h = new Cartridge(cpu);
+            h.RomBanks = r.ReadByte();
+            h.RomBankData = new byte[h.RomBanks * ROMBANK_SIZE];
+            h.VRomBanks = r.ReadByte();
+            h.VRomBankData = new byte[h.VRomBanks * VROMBANK_SIZE];
+            h.Flags6 = r.ReadByte();
+            h.Flags7 = r.ReadByte();
+            h.RamBank = r.ReadByte();
+            h.Region = r.ReadByte();
+            r.ReadBytes(6);
+            h.RomBankData = r.ReadBytes(h.RomBanks * ROMBANK_SIZE);
+            h.VRomBankData = r.ReadBytes(h.VRomBanks * VROMBANK_SIZE);
+            h.Mirror = (MirrorEnum) (h.Flags6 & 0x01);
+            h.RamBankData = new byte[8192];
+
+            if (h.VRomBanks == 0)
+            {
+                h.VRomBankData = new byte[0x2000];
+            }
+
+
+            var mapperId = ((h.Flags6 >> 4) & 0x0F) | (h.Flags7 & 0xF0);
+            h.Mapper = mapperId switch
+            {
+                0 => new Mapper000(h),
+                1 => new Mapper001(h),
+                2 => new Mapper002(h),
+                _ => throw new UnsupportedMapperException(mapperId)
+            };
+            return h;
+        }
+
+        public static Cartridge Load(string path, Cpu6502State cpu)
         {
             using (var f = new FileStream(path, FileMode.Open, FileAccess.Read))
             {
-                var r = new BinaryReader(f);
-                var header = r.ReadBytes(4);
-                var h = new Cartridge();
-                h.RomBanks = r.ReadByte();
-                h.RomBankData = new byte[h.RomBanks * ROMBANK_SIZE];
-                h.VRomBanks = r.ReadByte();
-                h.VRomBankData = new byte[h.VRomBanks * VROMBANK_SIZE];
-                h.Flags6 = r.ReadByte();
-                h.Flags7 = r.ReadByte();
-                h.RamBank = r.ReadByte();
-                h.Region = r.ReadByte();
-                r.ReadBytes(6);
-                h.RomBankData = r.ReadBytes(h.RomBanks * ROMBANK_SIZE);
-                h.VRomBankData = r.ReadBytes(h.VRomBanks * VROMBANK_SIZE);
-                h.Mirror = (MirrorEnum)(h.Flags6 & 0x01);
-                h.RamBankData = new byte[8192];
-
-                var mapperId = ((h.Flags6 >> 4) & 0x0F) | (h.Flags7 & 0xF0);
-                h.Mapper = mapperId switch
-                {
-                    0 => new Mapper000(h),
-                    2 => new Mapper002(h),
-                    _ => new Mapper000(h)
-                };
-                return h;
+                return Load(f, cpu);
             }
         }
 
@@ -86,6 +100,16 @@ namespace Fami.Core
         public bool PpuWrite(uint address, uint value)
         {
             return Mapper.PpuMapWrite(address, value);
+        }
+    }
+
+    public class UnsupportedMapperException : Exception
+    {
+        private readonly int _mapperId;
+
+        public UnsupportedMapperException(int mapperId) : base($"Unsupported Mapper {mapperId}")
+        {
+            _mapperId = mapperId;
         }
     }
 }

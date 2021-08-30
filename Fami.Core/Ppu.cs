@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace Fami.Core
 {
@@ -399,7 +400,7 @@ namespace Fami.Core
         public uint[] sprite_shifter_pattern_hi = new uint[64];
         public bool bSpriteZeroBeingRendered;
         public bool bSpriteZeroHitPossible;
-
+        private const uint SpriteLimit = 64;
         public void Clock()
         {
             void IncrementScrollX()
@@ -832,7 +833,7 @@ namespace Fami.Core
                 // flag.
                 bSpriteZeroHitPossible = false;
 
-                while (nOAMEntry < 64 && sprite_count < 9)
+                while (nOAMEntry < 64 && sprite_count < SpriteLimit + 1)
                 {
                     // Note the conversion to signed numbers here
                     int diff = ((int)scanline - (int)pOAM[nOAMEntry * 4]);
@@ -847,7 +848,7 @@ namespace Fami.Core
                         // Sprite is visible, so copy the attribute entry over to our
                         // scanline sprite cache. Ive added < 8 here to guard the array
                         // being written to.
-                        if (sprite_count < 8)
+                        if (sprite_count < SpriteLimit)
                         {
                             // Is this sprite sprite zero?
                             if (nOAMEntry == 0)

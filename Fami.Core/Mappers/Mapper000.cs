@@ -2,12 +2,10 @@
 {
     public class Mapper000 : BaseMapper
     {
-        private readonly Cartridge _cartridge;
         private readonly int _prgBanks;
 
-        public Mapper000(Cartridge cartridge)
+        public Mapper000(Cartridge cartridge) : base(cartridge)
         {
-            _cartridge = cartridge;
             _prgBanks = cartridge.RomBanks;
         }
 

@@ -19,7 +19,6 @@ namespace Fami.Core
 
         public void Init()
         {
-
             running = true;
             Cpu.Init();
             Cpu6502InstructionSet.InitCpu();
@@ -316,6 +315,11 @@ namespace Fami.Core
         public void LoadCartridge(Cartridge cart)
         {
             Cpu.LoadCartridge(cart);
+        }
+
+        public void Pause()
+        {
+            throw new NotImplementedException();
         }
     }
 }

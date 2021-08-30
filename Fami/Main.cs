@@ -1,6 +1,11 @@
 ﻿using System;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using Fami.Core;
+using SDL2;
 using static SDL2.SDL;
 
 namespace Fami
@@ -127,6 +132,7 @@ namespace Fami
         static long CyclesRan;
         static Thread EmulationThread;
         static AutoResetEvent ThreadSync = new AutoResetEvent(false);
+        private static bool Sync = true;
 
         public void EmulationThreadHandler()
         {
@@ -136,10 +142,10 @@ namespace Fami
                 {
                     ThreadSync.WaitOne();
                     RunFrame();
-                    //while (!Sync)
-                    //{
-                    //    RunFrame();
-                    //}
+                    while (!Sync)
+                    {
+                        RunFrame();
+                    }
                 }
             }
             catch (Exception e)
@@ -173,7 +179,7 @@ namespace Fami
         public void Test()
         {
             emu.Init();
-            var cart = Cartridge.Load("nestest.nes");
+            var cart = Cartridge.Load("nestest.nes", emu.Cpu);
             emu.LoadCartridge(cart);
             emu.Reset();
             emu.Cpu.PC = 0xC000;
@@ -182,13 +188,33 @@ namespace Fami
 
         public void Load(string rompath)
         {
+            Cartridge cart = null;
             emu.Init();
-            var cart = Cartridge.Load(rompath);
+            if (Path.GetExtension(rompath).ToLower() == ".zip")
+            {
+                using var zipFile = ZipFile.Open(rompath, ZipArchiveMode.Read);
+                var nesFile = zipFile.Entries.FirstOrDefault(z=> Path.GetExtension(z.Name).ToLower() == ".nes");
+                if (nesFile == default)
+                {
+
+                }
+                else
+                {
+                    using var s = nesFile.Open();
+                    cart = Cartridge.Load(s, emu.Cpu);
+                }
+            }
+            else
+            {
+                cart = Cartridge.Load(rompath, emu.Cpu);
+            }
             emu.LoadCartridge(cart);
             emu.Reset();
         }
 
         private bool running;
+        private string romPath;
+        private bool resetPending;
         public void Run()
         {
             EmulationThread = new Thread(EmulationThreadHandler);
@@ -223,32 +249,27 @@ namespace Fami
                             KeyEvent(evt.key);
                             break;
 
-                            //case SDL_EventType.SDL_DROPFILE:
-                            //    var filename = Marshal.PtrToStringUTF8(evt.drop.file);
-                            //    try
-                            //    {
-                            //        romPath = filename;
-                            //        goto reload;
-                            //    }
-                            //    catch
-                            //    {
-                            //        Log("An error occurred loading the dropped ROM file.");
-                            //        return;
-                            //    }
+                        case SDL_EventType.SDL_DROPFILE:
+                            var filename = Marshal.PtrToStringUTF8(evt.drop.file);
+                            try
+                            {
+                                romPath = filename;
+                                resetPending = true;
+                            }
+                            catch
+                            {
+                                //Log("An error occurred loading the dropped ROM file.");
+                                return;
+                            }
+                            break;
                     }
                 }
 
-                //main.Fill(255, r, g, b);
-
-                //r = (uint)rand.Next(255);
-                //g = (uint)rand.Next(255);
-                //b = (uint)rand.Next(255);
-                //r++;
-                //if (r > 255) r = 0;
-                //if (r % 3 == 0) g++;
-                //if (g > 255) g = 0;
-                //if (g % 3 == 0) b++;
-                //if (b > 255) b = 0;
+                if (resetPending)
+                {
+                    Load(romPath);
+                    resetPending = false;
+                }
 
                 double currentSec = GetTime();
 
@@ -337,6 +358,9 @@ namespace Fami
                     case SDL_Keycode.SDLK_ESCAPE:
                         emu.Reset();
                         break;
+                    case SDL_Keycode.SDLK_SPACE:
+                        Sync = false;
+                        break;
                 }
             }
             if (evtKey.type == SDL_EventType.SDL_KEYUP)
@@ -369,6 +393,10 @@ namespace Fami
                     case SDL_Keycode.SDLK_x:
                         controller1state &= ~0x40U;
                         break;
+                    case SDL_Keycode.SDLK_SPACE:
+                        Sync = true;
+                        break;
+
                 }
             }
 

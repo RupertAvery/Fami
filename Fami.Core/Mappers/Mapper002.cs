@@ -2,11 +2,9 @@
 {
     public class Mapper002 : BaseMapper
     {
-        private readonly Cartridge _cartridge;
         private uint _bankOffset;
-        public Mapper002(Cartridge cartridge)
+        public Mapper002(Cartridge cartridge) : base(cartridge)
         {
-            _cartridge = cartridge;
         }
 
         public override (uint value, bool handled) CpuMapRead(uint address)
