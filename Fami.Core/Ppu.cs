@@ -2,13 +2,15 @@
 
 namespace Fami.Core
 {
-    public class OAM
+
+    public class SpriteScanline
     {
-        public uint Y { get; set; }
-        public uint Id { get; set; }
-        public uint Attribute { get; set; }
         public uint X { get; set; }
+        public uint Y { get; set; }
+        public uint Attribute { get; set; }
+        public uint Id { get; set; }
     }
+
 
     public class Ppu
     {
@@ -389,14 +391,6 @@ namespace Fami.Core
         public bool bSpriteZeroBeingRendered;
         public bool bSpriteZeroHitPossible;
 
-        public class SpriteScanline
-        {
-            public uint X { get; set; }
-            public uint Y { get; set; }
-            public uint Attribute { get; set; }
-            public uint Id { get; set; }
-        }
-
         public void Clock()
         {
             void IncrementScrollX()
@@ -417,7 +411,7 @@ namespace Fami.Core
                         // Leaving nametable so wrap address round
                         vram_addr.CoarseX = 0;
                         // Flip target nametable bit
-                        vram_addr.NametableX = ~vram_addr.NametableX;
+                        vram_addr.NametableX = vram_addr.NametableX == 0 ? (uint) 1 : (uint) 0;
                     }
                     else
                     {
@@ -454,7 +448,7 @@ namespace Fami.Core
                             // We do, so reset coarse y offset
                             vram_addr.CoarseY = 0;
                             // And flip the target nametable bit
-                            vram_addr.NametableY = ~vram_addr.NametableY;
+                            vram_addr.NametableY = vram_addr.NametableY == 0 ? (uint)1 : (uint)0;
                         }
                         else if (vram_addr.CoarseY == 31)
                         {
@@ -832,7 +826,7 @@ namespace Fami.Core
                 while (nOAMEntry < 64 && sprite_count < 9)
                 {
                     // Note the conversion to signed numbers here
-                    int diff = ((int)scanline - (int)spriteScanline[nOAMEntry].Y);
+                    int diff = ((int)scanline - (int)pOAM[nOAMEntry * 4]);
 
                     // If the difference is positive then the scanline is at least at the
                     // same height as the sprite, so check if it resides in the sprite vertically
@@ -1147,6 +1141,7 @@ namespace Fami.Core
                 // The background pixel is visible
                 // The foreground pixel is visible
                 // Hmmm...
+
                 if (fg_priority == 1)
                 {
                     // Foreground cheats its way to victory!

@@ -117,7 +117,7 @@
             }
             else if (address == 0x4014)
             {
-                dma_page = dma_data;
+                dma_page = value;
                 dma_address = 0x00;
                 dma_transfer = true;
             }
