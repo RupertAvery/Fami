@@ -21,9 +21,9 @@ namespace Fami
                 uint b = 0;
                 
                 //main.Test();
-                main.Load("Super Mario Bros (E).nes");
+                //main.Load("Super Mario Bros (E).nes");
                 //main.Load("nestest.nes");
-                //main.Load("donkey.nes");
+                main.Load(args[0]);
                 main.Run();
             }
         }

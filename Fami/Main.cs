@@ -284,39 +284,73 @@ namespace Fami
             ThreadSync.Close();
 
         }
+        private uint controller1state = 0;
 
         private void KeyEvent(SDL_KeyboardEvent evtKey)
         {
-            uint controller1state = 0;
-            var held = evtKey.type == SDL_EventType.SDL_KEYDOWN;
-
-            switch (evtKey.keysym.sym)
+            if (evtKey.type == SDL_EventType.SDL_KEYDOWN)
             {
-                case SDL_Keycode.SDLK_UP:
-                    controller1state |= held ? 0x08U : 00;
-                    break;
-                case SDL_Keycode.SDLK_DOWN:
-                    controller1state |= held ? 0x04U : 00;
-                    break;
-                case SDL_Keycode.SDLK_LEFT:
-                    controller1state |= held ? 0x02U : 00;
-                    break;
-                case SDL_Keycode.SDLK_RIGHT:
-                    controller1state |= held ? 0x01U : 00;
-                    break;
-                case SDL_Keycode.SDLK_RETURN:
-                    controller1state |= held ? 0x10U : 00;
-                    break;
-                case SDL_Keycode.SDLK_LSHIFT:
-                case SDL_Keycode.SDLK_RSHIFT:
-                    controller1state |= held ? 0x20U : 00;
-                    break;
-                case SDL_Keycode.SDLK_z:
-                    controller1state |= held ? 0x80U : 00;
-                    break;
-                case SDL_Keycode.SDLK_x:
-                    controller1state |= held ? 0x40U : 00;
-                    break;
+
+                switch (evtKey.keysym.sym)
+                {
+                    case SDL_Keycode.SDLK_UP:
+                        controller1state |= 0x08U;
+                        break;
+                    case SDL_Keycode.SDLK_DOWN:
+                        controller1state |= 0x04U;
+                        break;
+                    case SDL_Keycode.SDLK_LEFT:
+                        controller1state |= 0x02U;
+                        break;
+                    case SDL_Keycode.SDLK_RIGHT:
+                        controller1state |= 0x01U;
+                        break;
+                    case SDL_Keycode.SDLK_RETURN:
+                        controller1state |= 0x10U;
+                        break;
+                    case SDL_Keycode.SDLK_LSHIFT:
+                    case SDL_Keycode.SDLK_RSHIFT:
+                        controller1state |= 0x20U;
+                        break;
+                    case SDL_Keycode.SDLK_z:
+                        controller1state |= 0x80U;
+                        break;
+                    case SDL_Keycode.SDLK_x:
+                        controller1state |= 0x40U;
+                        break;
+                }
+            }
+            if (evtKey.type == SDL_EventType.SDL_KEYUP)
+            {
+
+                switch (evtKey.keysym.sym)
+                {
+                    case SDL_Keycode.SDLK_UP:
+                        controller1state &= ~0x08U;
+                        break;
+                    case SDL_Keycode.SDLK_DOWN:
+                        controller1state &= ~0x04U;
+                        break;
+                    case SDL_Keycode.SDLK_LEFT:
+                        controller1state &= ~0x02U;
+                        break;
+                    case SDL_Keycode.SDLK_RIGHT:
+                        controller1state &= ~0x01U;
+                        break;
+                    case SDL_Keycode.SDLK_RETURN:
+                        controller1state &= ~0x10U;
+                        break;
+                    case SDL_Keycode.SDLK_LSHIFT:
+                    case SDL_Keycode.SDLK_RSHIFT:
+                        controller1state &= ~0x20U;
+                        break;
+                    case SDL_Keycode.SDLK_z:
+                        controller1state &= ~0x80U;
+                        break;
+                    case SDL_Keycode.SDLK_x:
+                        controller1state &= ~0x40U;
+                        break;
+                }
             }
 
             emu.Cpu.Controller[0] = controller1state;
