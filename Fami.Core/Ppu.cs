@@ -2,6 +2,14 @@
 
 namespace Fami.Core
 {
+    public class OAM
+    {
+        public uint Y { get; set; }
+        public uint Id { get; set; }
+        public uint Attribute { get; set; }
+        public uint X { get; set; }
+    }
+
     public class Ppu
     {
         private readonly Cpu6502State _state;
@@ -44,6 +52,7 @@ namespace Fami.Core
         private uint[,] tblName = new uint[2, 1024];
         private uint[] tblPalette = new uint[32];
         private uint[,] tblPattern = new uint[2, 4096];
+        private uint[] tblOAM = new uint[1];
 
         private Cartridge _cart;
 
@@ -122,7 +131,13 @@ namespace Fami.Core
         {
             _state = state;
             Renderer = new PpuRenderer();
+            for (var i = 0; i < 64; i++)
+            {
+                spriteScanline[i] = new SpriteScanline();
+            }
         }
+
+        private uint oam_addr;
 
         public void Write(uint address, uint data)
         {
@@ -139,8 +154,10 @@ namespace Fami.Core
                 case PPUSTATUS:
                     break;
                 case OAMADDR:
+                    oam_addr = data;
                     break;
                 case OAMDATA:
+                    pOAM[oam_addr] = data;
                     break;
                 case PPUSCROLL:
                     if (address_latch == 0)
@@ -215,6 +232,7 @@ namespace Fami.Core
                 case OAMADDR:
                     break;
                 case OAMDATA:
+                    data = pOAM[oam_addr];
                     break;
                 case PPUSCROLL:
                     break;
@@ -363,15 +381,21 @@ namespace Fami.Core
         private int cycle;
         private int scanline;
         private bool frameComplete;
-        private uint tileY;
-        private uint tileX;
-        private uint row;
-        private uint col;
-        private uint offset;
-        private uint tileLsb;
-        private uint tileMsb;
-        private uint paletteId = 0;
-        private uint tableId = 0;
+        public uint[] pOAM = new uint[256];
+        public uint sprite_count;
+        public SpriteScanline[] spriteScanline = new SpriteScanline[64];
+        public uint[] sprite_shifter_pattern_lo = new uint[64];
+        public uint[] sprite_shifter_pattern_hi = new uint[64];
+        public bool bSpriteZeroBeingRendered;
+        public bool bSpriteZeroHitPossible;
+
+        public class SpriteScanline
+        {
+            public uint X { get; set; }
+            public uint Y { get; set; }
+            public uint Attribute { get; set; }
+            public uint Id { get; set; }
+        }
 
         public void Clock()
         {
@@ -521,6 +545,21 @@ namespace Fami.Core
                     bg_shifter_attrib_lo <<= 1;
                     bg_shifter_attrib_hi <<= 1;
                 }
+                if (ppu_mask.RenderSprites == 1 && cycle >= 1 && cycle < 258)
+                {
+                    for (int i = 0; i < sprite_count; i++)
+                    {
+                        if (spriteScanline[i].X > 0)
+                        {
+                            spriteScanline[i].X--;
+                        }
+                        else
+                        {
+                            sprite_shifter_pattern_lo[i] <<= 1;
+                            sprite_shifter_pattern_hi[i] <<= 1;
+                        }
+                    }
+                }
             };
 
             // All but 1 of the secanlines is visible to the user. The pre-render scanline
@@ -537,6 +576,19 @@ namespace Fami.Core
                 {
                     // Effectively start of new frame, so clear vertical blank flag
                     ppu_status.VerticalBlank = 0;
+
+                    // Clear sprite overflow flag
+                    ppu_status.SpriteOverflow = 0;
+
+                    // Clear the sprite zero hit flag
+                    ppu_status.SpriteZeroHit = 0;
+
+                    // Clear Shifters
+                    for (int i = 0; i < 8; i++)
+                    {
+                        sprite_shifter_pattern_lo[i] = 0;
+                        sprite_shifter_pattern_hi[i] = 0;
+                    }
                 }
 
 
@@ -729,6 +781,229 @@ namespace Fami.Core
                 }
             }
 
+
+            // Foreground Rendering ========================================================
+            // I'm gonna cheat a bit here, which may reduce compatibility, but greatly
+            // simplifies delivering an intuitive understanding of what exactly is going
+            // on. The PPU loads sprite information successively during the region that
+            // background tiles are not being drawn. Instead, I'm going to perform
+            // all sprite evaluation in one hit. THE NES DOES NOT DO IT LIKE THIS! This makes
+            // it easier to see the process of sprite evaluation.
+            if (cycle == 257 && scanline >= 0)
+            {
+                // We've reached the end of a visible scanline. It is now time to determine
+                // which sprites are visible on the next scanline, and preload this info
+                // into buffers that we can work with while the scanline scans the row.
+
+                // Firstly, clear out the sprite memory. This memory is used to store the
+                // sprites to be rendered. It is not the OAM.
+                //std::memset(spriteScanline, 0xFF, 8 * sizeof(sObjectAttributeEntry));
+
+                foreach (var sprite in spriteScanline)
+                {
+                    sprite.Y = 0xff;
+                    sprite.Id = 0xff;
+                    sprite.Attribute = 0xff;
+                    sprite.X = 0xff;
+                }
+                // The NES supports a maximum number of sprites per scanline. Nominally
+                // this is 8 or fewer sprites. This is why in some games you see sprites
+                // flicker or disappear when the scene gets busy.
+                sprite_count = 0;
+
+                // Secondly, clear out any residual information in sprite pattern shifters
+                for (uint i = 0; i < 8; i++)
+                {
+                    sprite_shifter_pattern_lo[i] = 0;
+                    sprite_shifter_pattern_hi[i] = 0;
+                }
+
+                // Thirdly, Evaluate which sprites are visible in the next scanline. We need
+                // to iterate through the OAM until we have found 8 sprites that have Y-positions
+                // and heights that are within vertical range of the next scanline. Once we have
+                // found 8 or exhausted the OAM we stop. Now, notice I count to 9 sprites. This
+                // is so I can set the sprite overflow flag in the event of there being > 8 sprites.
+                uint nOAMEntry = 0;
+
+                // New set of sprites. Sprite zero may not exist in the new set, so clear this
+                // flag.
+                bSpriteZeroHitPossible = false;
+
+                while (nOAMEntry < 64 && sprite_count < 9)
+                {
+                    // Note the conversion to signed numbers here
+                    int diff = ((int)scanline - (int)spriteScanline[nOAMEntry].Y);
+
+                    // If the difference is positive then the scanline is at least at the
+                    // same height as the sprite, so check if it resides in the sprite vertically
+                    // depending on the current "sprite height mode"
+                    // FLAGGED
+
+                    if (diff >= 0 && diff < (ppu_control.SpriteSize == 1 ? 16 : 8))
+                    {
+                        // Sprite is visible, so copy the attribute entry over to our
+                        // scanline sprite cache. Ive added < 8 here to guard the array
+                        // being written to.
+                        if (sprite_count < 8)
+                        {
+                            // Is this sprite sprite zero?
+                            if (nOAMEntry == 0)
+                            {
+                                // It is, so its possible it may trigger a 
+                                // sprite zero hit when drawn
+                                bSpriteZeroHitPossible = true;
+                            }
+
+                            spriteScanline[sprite_count].Y = pOAM[nOAMEntry * 4];
+                            spriteScanline[sprite_count].Id = pOAM[nOAMEntry * 4 + 1];
+                            spriteScanline[sprite_count].Attribute = pOAM[nOAMEntry * 4 + 2];
+                            spriteScanline[sprite_count].X = pOAM[nOAMEntry * 4 + 3];
+                            sprite_count++;
+                        }
+                    }
+
+                    nOAMEntry++;
+                } // End of sprite evaluation for next scanline
+
+                // Set sprite overflow flag
+                ppu_status.SpriteOverflow = (sprite_count > 8) ? 1U : 0;
+
+                // Now we have an array of the 8 visible sprites for the next scanline. By 
+                // the nature of this search, they are also ranked in priority, because
+                // those lower down in the OAM have the higher priority.
+
+                // We also guarantee that "Sprite Zero" will exist in spriteScanline[0] if
+                // it is evaluated to be visible. 
+            }
+
+            if (cycle == 340)
+            {
+                // Now we're at the very end of the scanline, I'm going to prepare the 
+                // sprite shifters with the 8 or less selected sprites.
+
+                for (uint i = 0; i < sprite_count; i++)
+                {
+                    // We need to extract the 8-bit row patterns of the sprite with the
+                    // correct vertical offset. The "Sprite Mode" also affects this as
+                    // the sprites may be 8 or 16 rows high. Additionally, the sprite
+                    // can be flipped both vertically and horizontally. So there's a lot
+                    // going on here :P
+
+                    uint sprite_pattern_bits_lo, sprite_pattern_bits_hi;
+                    uint sprite_pattern_addr_lo, sprite_pattern_addr_hi;
+
+                    // Determine the memory addresses that contain the byte of pattern data. We
+                    // only need the lo pattern address, because the hi pattern address is always
+                    // offset by 8 from the lo address.
+                    if (ppu_control.SpriteSize == 0)
+                    {
+                        // 8x8 Sprite Mode - The control register determines the pattern table
+                        if ((spriteScanline[i].Attribute & 0x80) == 0)
+                        {
+                            // Sprite is NOT flipped vertically, i.e. normal    
+                            sprite_pattern_addr_lo = (uint)(
+                              (ppu_control.PatternSprite << 12)  // Which Pattern Table? 0KB or 4KB offset
+                            | (spriteScanline[i].Id << 4)  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                            | (scanline - spriteScanline[i].Y)); // Which Row in cell? (0->7)
+
+                        }
+                        else
+                        {
+                            // Sprite is flipped vertically, i.e. upside down
+                            sprite_pattern_addr_lo = (uint)(
+                              (ppu_control.PatternSprite << 12)  // Which Pattern Table? 0KB or 4KB offset
+                            | (spriteScanline[i].Id << 4)  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                            | (7 - (scanline - spriteScanline[i].Y))); // Which Row in cell? (7->0)
+                        }
+
+                    }
+                    else
+                    {
+                        // 8x16 Sprite Mode - The sprite attribute determines the pattern table
+                        if ((spriteScanline[i].Attribute & 0x80) == 0)
+                        {
+                            // Sprite is NOT flipped vertically, i.e. normal
+                            if (scanline - spriteScanline[i].Y < 8)
+                            {
+                                // Reading Top half Tile
+                                sprite_pattern_addr_lo = (uint)(
+                                  ((spriteScanline[i].Id & 0x01) << 12)  // Which Pattern Table? 0KB or 4KB offset
+                                | ((spriteScanline[i].Id & 0xFE) << 4)  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                | ((scanline - spriteScanline[i].Y) & 0x07)); // Which Row in cell? (0->7)
+                            }
+                            else
+                            {
+                                // Reading Bottom Half Tile
+                                sprite_pattern_addr_lo = (uint)(
+                                  ((spriteScanline[i].Id & 0x01) << 12)  // Which Pattern Table? 0KB or 4KB offset
+                                | (((spriteScanline[i].Id & 0xFE) + 1) << 4)  // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                | ((scanline - spriteScanline[i].Y) & 0x07)); // Which Row in cell? (0->7)
+                            }
+                        }
+                        else
+                        {
+                            // Sprite is flipped vertically, i.e. upside down
+                            if (scanline - spriteScanline[i].Y < 8)
+                            {
+                                // Reading Top half Tile
+                                sprite_pattern_addr_lo = (uint)(
+                                  ((spriteScanline[i].Id & 0x01) << 12)    // Which Pattern Table? 0KB or 4KB offset
+                                | (((spriteScanline[i].Id & 0xFE) + 1) << 4)    // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                | (7 - (scanline - spriteScanline[i].Y) & 0x07)); // Which Row in cell? (0->7)
+                            }
+                            else
+                            {
+                                // Reading Bottom Half Tile
+                                sprite_pattern_addr_lo = (uint)(
+                                  ((spriteScanline[i].Id & 0x01) << 12)    // Which Pattern Table? 0KB or 4KB offset
+                                | ((spriteScanline[i].Id & 0xFE) << 4)    // Which Cell? Tile ID * 16 (16 bytes per tile)
+                                | (7 - (scanline - spriteScanline[i].Y) & 0x07)); // Which Row in cell? (0->7)
+                            }
+                        }
+                    }
+
+                    // Phew... XD I'm absolutely certain you can use some fantastic bit 
+                    // manipulation to reduce all of that to a few one liners, but in this
+                    // form it's easy to see the processes required for the different
+                    // sizes and vertical orientations
+
+                    // Hi bit plane equivalent is always offset by 8 bytes from lo bit plane
+                    sprite_pattern_addr_hi = sprite_pattern_addr_lo + 8;
+
+                    // Now we have the address of the sprite patterns, we can read them
+                    sprite_pattern_bits_lo = PpuRead(sprite_pattern_addr_lo);
+                    sprite_pattern_bits_hi = PpuRead(sprite_pattern_addr_hi);
+
+                    // If the sprite is flipped horizontally, we need to flip the 
+                    // pattern bytes. 
+                    if ((spriteScanline[i].Attribute & 0x40) == 0x40)
+                    {
+                        // This little lambda function "flips" a byte
+                        // so 0b11100000 becomes 0b00000111. It's very
+                        // clever, and stolen completely from here:
+                        // https://stackoverflow.com/a/2602885
+                        uint flipbyte(uint b)
+                        {
+                            b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+                            b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+                            b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+                            return b;
+                        };
+
+                        // Flip Patterns Horizontally
+                        sprite_pattern_bits_lo = flipbyte(sprite_pattern_bits_lo);
+                        sprite_pattern_bits_hi = flipbyte(sprite_pattern_bits_hi);
+                    }
+
+                    // Finally! We can load the pattern into our sprite shift registers
+                    // ready for rendering on the next scanline
+                    sprite_shifter_pattern_lo[i] = sprite_pattern_bits_lo;
+                    sprite_shifter_pattern_hi[i] = sprite_pattern_bits_hi;
+                }
+            }
+        
+
+
             if (scanline == 240)
             {
                 // Post Render Scanline - Do Nothing!
@@ -785,10 +1060,141 @@ namespace Fami.Core
                 bg_palette = (bg_pal1 << 1) | bg_pal0;
             }
 
+
+            // Foreground =============================================================
+            uint fg_pixel = 0x00;   // The 2-bit pixel to be rendered
+            uint fg_palette = 0x00; // The 3-bit index of the palette the pixel indexes
+            uint fg_priority = 0x00;// A bit of the sprite attribute indicates if its
+                                       // more important than the background
+            if (ppu_mask.RenderSprites == 1)
+            {
+                // Iterate through all sprites for this scanline. This is to maintain
+                // sprite priority. As soon as we find a non transparent pixel of
+                // a sprite we can abort
+
+                bSpriteZeroBeingRendered = false;
+
+                for (uint i = 0; i < sprite_count; i++)
+                {
+                    // Scanline cycle has "collided" with sprite, shifters taking over
+                    if (spriteScanline[i].X == 0)
+                    {
+                        // Note Fine X scrolling does not apply to sprites, the game
+                        // should maintain their relationship with the background. So
+                        // we'll just use the MSB of the shifter
+
+                        // Determine the pixel value...
+                        uint fg_pixel_lo = (sprite_shifter_pattern_lo[i] & 0x80) > 0 ? 1U : 0;
+                        uint fg_pixel_hi = (sprite_shifter_pattern_hi[i] & 0x80) > 0 ? 1U : 0;
+                        fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
+
+                        // Extract the palette from the bottom two bits. Recall
+                        // that foreground palettes are the latter 4 in the 
+                        // palette memory.
+                        fg_palette = (spriteScanline[i].Attribute & 0x03) + 0x04;
+                        fg_priority = (spriteScanline[i].Attribute & 0x20) == 0 ? 1U : 0;
+
+                        // If pixel is not transparent, we render it, and dont
+                        // bother checking the rest because the earlier sprites
+                        // in the list are higher priority
+                        if (fg_pixel != 0)
+                        {
+                            if (i == 0) // Is this sprite zero?
+                            {
+                                bSpriteZeroBeingRendered = true;
+                            }
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Now we have a background pixel and a foreground pixel. They need
+            // to be combined. It is possible for sprites to go behind background
+            // tiles that are not "transparent", yet another neat trick of the PPU
+            // that adds complexity for us poor emulator developers...
+
+            uint pixel = 0x00;   // The FINAL Pixel...
+            uint palette = 0x00; // The FINAL Palette...
+
+            if (bg_pixel == 0 && fg_pixel == 0)
+            {
+                // The background pixel is transparent
+                // The foreground pixel is transparent
+                // No winner, draw "background" colour
+                pixel = 0x00;
+                palette = 0x00;
+            }
+            else if (bg_pixel == 0 && fg_pixel > 0)
+            {
+                // The background pixel is transparent
+                // The foreground pixel is visible
+                // Foreground wins!
+                pixel = fg_pixel;
+                palette = fg_palette;
+            }
+            else if (bg_pixel > 0 && fg_pixel == 0)
+            {
+                // The background pixel is visible
+                // The foreground pixel is transparent
+                // Background wins!
+                pixel = bg_pixel;
+                palette = bg_palette;
+            }
+            else if (bg_pixel > 0 && fg_pixel > 0)
+            {
+                // The background pixel is visible
+                // The foreground pixel is visible
+                // Hmmm...
+                if (fg_priority == 1)
+                {
+                    // Foreground cheats its way to victory!
+                    pixel = fg_pixel;
+                    palette = fg_palette;
+                }
+                else
+                {
+                    // Background is considered more important!
+                    pixel = bg_pixel;
+                    palette = bg_palette;
+                }
+
+                // Sprite Zero Hit detection
+                if (bSpriteZeroHitPossible && bSpriteZeroBeingRendered)
+                {
+                    // Sprite zero is a collision between foreground and background
+                    // so they must both be enabled
+                    if (ppu_mask.RenderBackground == 1 & ppu_mask.RenderSprites == 1)
+                    {
+                        // The left edge of the screen has specific switches to control
+                        // its appearance. This is used to smooth inconsistencies when
+                        // scrolling (since sprites x coord must be >= 0)
+                        if (!(ppu_mask.RenderBackgroundLeft == 1 | ppu_mask.RenderSpritesleft == 1))
+                        {
+                            if (cycle >= 9 && cycle < 258)
+                            {
+                                ppu_status.SpriteZeroHit = 1;
+                            }
+                        }
+                        else
+                        {
+                            if (cycle >= 1 && cycle < 258)
+                            {
+                                ppu_status.SpriteZeroHit = 1;
+                            }
+                        }
+                    }
+                }
+            }
+
+
+
+
             if (cycle > 1 && cycle < 256 && scanline > 0 && scanline < 240)
             {
                 Renderer.buffer[cycle - 1 + scanline * 256] =
-                    palScreen[PpuRead(0x3F00 + (bg_palette << 2) + bg_pixel) & 0x3F];
+                    palScreen[PpuRead(0x3F00 + (palette << 2) + pixel) & 0x3F];
             }
 
             cycle++;

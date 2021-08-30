@@ -1,4 +1,4 @@
 ﻿namespace Fami.Core
 {
-    public delegate void Cpu6502Execute(Cpu6502State cpu);
+    public delegate uint Cpu6502Execute(Cpu6502State cpu);
 }

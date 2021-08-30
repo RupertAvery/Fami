@@ -56,9 +56,9 @@ namespace Fami.Core
         public static void AddrModeAbsoluteY(this Cpu6502State cpu)
         {
             var basemem = cpu.Read(cpu.PC + 1) + cpu.Read(cpu.PC + 2) * 0x100;
-            var basememPage = (basemem >> 8) & 0xff;
-            cpu.EffectiveAddr = basemem + cpu.Y;
-            var effAddPage = (cpu.EffectiveAddr >> 8) & 0xff;
+            var basememPage = (basemem >> 8) & 0xFF;
+            cpu.EffectiveAddr = (basemem + cpu.Y) & 0xFFFF;
+            var effAddPage = (cpu.EffectiveAddr >> 8) & 0xFF;
 
             //var x = cpu.PC >> 8;
             //var y = cpu.EffectiveAddr >> 8;
@@ -112,8 +112,8 @@ namespace Fami.Core
         {
             var arg = cpu.Read(cpu.PC + 1);
             var basemem = cpu.Read(arg) + cpu.Read((arg + 1) % 0x100) * 0x100;
-            var basememPage = (basemem >> 8) & 0xff;
-            cpu.EffectiveAddr = basemem + cpu.Y;
+            var basememPage = (basemem >> 8) & 0xFF;
+            cpu.EffectiveAddr = (basemem + cpu.Y) & 0xFFFF;
             var effAddPage = (cpu.EffectiveAddr >> 8) & 0xff;
 
             if (basememPage != effAddPage)

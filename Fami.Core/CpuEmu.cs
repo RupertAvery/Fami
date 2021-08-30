@@ -34,12 +34,42 @@ namespace Fami.Core
         {
             var cycles = 0U;
             Cpu.Ppu.Clock();
-         
+
             if (Cpu.Ppu.cycles % 3 == 0)
             {
-                cycles = Dispatch();
-                Cpu.cycles += cycles;
-                Cpu.instructions++;
+                if (Cpu.dma_transfer)
+                {
+                    if (Cpu.dma_dummy)
+                    {
+                        if (Cpu.Ppu.cycles % 2 == 1)
+                        {
+                            Cpu.dma_dummy = false;
+                        }
+                    }
+                    else
+                    {
+                        if (Cpu.Ppu.cycles % 2 == 0)
+                        {
+                            Cpu.dma_data = Cpu.Read(Cpu.dma_page << 8 | Cpu.dma_address);
+                        }
+                        else
+                        {
+                            Cpu.Ppu.pOAM[Cpu.dma_address] = Cpu.dma_data;
+                            Cpu.dma_address++;
+                            if (Cpu.dma_address == 256)
+                            {
+                                Cpu.dma_transfer = false;
+                                Cpu.dma_dummy = true;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    cycles = Dispatch();
+                    Cpu.cycles += cycles;
+                    Cpu.instructions++;
+                }
             }
 
             if (Cpu.NMI)
@@ -47,9 +77,9 @@ namespace Fami.Core
                 Cpu.NMI = false;
                 Cpu.cycles += Cpu.NonMaskableInterrupt();
             }
-            
-            
-            return cycles;
+
+
+            return 1;
         }
 
         private bool Debug { get; set; }
@@ -118,11 +148,11 @@ namespace Fami.Core
             {
                 //case 0xC6BC:
                 //case 0xE928:
-                case 0x8EB9:
-                //case 0xFA4D:
-                //case 0xC79B:
-                //case 0xF55E:
-                //case 0xFAF1:
+                case 0xF2FC:
+                    //case 0xFA4D:
+                    //case 0xC79B:
+                    //case 0xF55E:
+                    //case 0xFAF1:
                     var x = 1;
                     break;
             }
@@ -130,10 +160,10 @@ namespace Fami.Core
             var ins = Cpu.Read(Cpu.PC);
             var bytes = Cpu6502InstructionSet.bytes[ins];
 
-            //if (Debug)
-            //{
-            //    Log(bytes);
-            //}
+            if (Debug)
+            {
+                Log(bytes);
+            }
 
             // This could be moved into each instruction, but we would need to implement all 255 instructions separately
             switch (Cpu6502InstructionSet.addrmodes[ins])
@@ -189,21 +219,9 @@ namespace Fami.Core
 
             Cpu.PC += bytes;
 
-            Cpu6502InstructionSet.OpCodes[ins](Cpu);
-
-            //if (Cpu.PC == lastPC)
-            //{
-            //    throw new Exception("PC not updated!");
-            //}
-
             var pcycles = Cpu6502InstructionSet.cycles[ins];
 
-            // replace with ints so we can just add?
-            if (Cpu.Branched)
-            {
-                Cpu.Branched = false;
-                pcycles++;
-            }
+            pcycles += Cpu6502InstructionSet.OpCodes[ins](Cpu);
 
             if (Cpu.PageBoundsCrossed)
             {
@@ -257,6 +275,7 @@ namespace Fami.Core
                     case 0xF1:
                     case 0xFD:
                     case 0xF9:
+                    case 0xF0:
                         pcycles++;
                         break;
                 }
@@ -277,7 +296,7 @@ namespace Fami.Core
             return pcycles;
         }
 
-        private void Log(int bytes)
+        private void Log(uint bytes)
         {
             var sb = new StringBuilder();
             for (var i = 0u; i < bytes; i++)

@@ -2,6 +2,9 @@
 {
     public class Cpu6502State
     {
+        public uint[] Controller { get; set; } = new uint[2];
+        public uint[] ControllerState { get; set; } = new uint[2];
+
         public uint A { get; set; }
         public uint X { get; set; }
         public uint Y { get; set; }
@@ -48,7 +51,6 @@
 
         public uint EffectiveAddr { get; set; }
         public bool PageBoundsCrossed { get; set; }
-        public bool Branched { get; set; }
 
         //public sbyte rel;
         //public uint arg;
@@ -96,13 +98,12 @@
             }
             else if (address >= 0x4016 && address <= 0x4017)
             {
-                data = (controller_state[address & 0x0001] & 0x80) > 0 ? 1U : 0;
-                controller_state[address & 0x0001] <<= 1;
+                data = (ControllerState[address & 0x0001] & 0x80) > 0 ? 1U : 0;
+                ControllerState[address & 0x0001] <<= 1;
             }
             return data;
         }
 
-        private uint[] controller_state = new uint[2];
 
         public void Write(uint address, uint value)
         {
@@ -114,7 +115,24 @@
             {
                 Ppu.Write(address, value);
             }
+            else if (address == 0x4014)
+            {
+                dma_page = dma_data;
+                dma_address = 0x00;
+                dma_transfer = true;
+            }
+            else if (address >= 0x4016 && address <= 0x4017)
+            {
+                ControllerState[address & 0x1] = Controller[address & 01];
+            }
         }
+
+        public uint dma_page;
+        public uint dma_address;
+        public uint dma_data;
+
+        public bool dma_transfer;
+        public bool dma_dummy;
 
         public void LoadCartridge(Cartridge cart)
         {

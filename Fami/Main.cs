@@ -156,7 +156,10 @@ namespace Fami
         //1.662607MHz = 1662607Hz
         //1662607Hz/59.9Hz = 27756cycles/frame
         //public const int CyclesPerFrame = 27756;
-        public const int CyclesPerFrame = 27756;
+        //public const int CyclesPerFrame = 27756;
+        public const int CyclesPerFrame = 89341;
+        const double SecondsPerFrame = 1D / (5369318D / 89341D);
+        //private const double SecondsPerFrame = 1 / 59.97D;
 
         public void RunFrame()
         {
@@ -187,7 +190,6 @@ namespace Fami
         }
 
         private bool running;
-        private const double SecondsPerFrameGba = 1 / 59.97D;
         public void Run()
         {
             EmulationThread = new Thread(EmulationThreadHandler);
@@ -210,7 +212,7 @@ namespace Fami
                             break;
                         case SDL_EventType.SDL_KEYUP:
                         case SDL_EventType.SDL_KEYDOWN:
-                            //KeyEvent(evt.key);
+                            KeyEvent(evt.key);
                             break;
 
                             //case SDL_EventType.SDL_DROPFILE:
@@ -243,7 +245,7 @@ namespace Fami
                 double currentSec = GetTime();
 
                 // Reset time if behind schedule
-                if (currentSec - nextFrameAt >= SecondsPerFrameGba)
+                if (currentSec - nextFrameAt >= SecondsPerFrame)
                 {
                     double diff = currentSec - nextFrameAt;
                     Console.WriteLine("Can't keep up! Skipping " + (int)(diff * 1000) + " milliseconds");
@@ -252,7 +254,7 @@ namespace Fami
 
                 if (currentSec >= nextFrameAt)
                 {
-                    nextFrameAt += SecondsPerFrameGba;
+                    nextFrameAt += SecondsPerFrame;
 
                     ThreadSync.Set();
                 }
@@ -282,6 +284,45 @@ namespace Fami
             ThreadSync.Close();
 
         }
+
+        private void KeyEvent(SDL_KeyboardEvent evtKey)
+        {
+            uint controller1state = 0;
+            var held = evtKey.type == SDL_EventType.SDL_KEYDOWN;
+
+            switch (evtKey.keysym.sym)
+            {
+                case SDL_Keycode.SDLK_UP:
+                    controller1state |= held ? 0x08U : 00;
+                    break;
+                case SDL_Keycode.SDLK_DOWN:
+                    controller1state |= held ? 0x04U : 00;
+                    break;
+                case SDL_Keycode.SDLK_LEFT:
+                    controller1state |= held ? 0x02U : 00;
+                    break;
+                case SDL_Keycode.SDLK_RIGHT:
+                    controller1state |= held ? 0x01U : 00;
+                    break;
+                case SDL_Keycode.SDLK_RETURN:
+                    controller1state |= held ? 0x10U : 00;
+                    break;
+                case SDL_Keycode.SDLK_LSHIFT:
+                case SDL_Keycode.SDLK_RSHIFT:
+                    controller1state |= held ? 0x20U : 00;
+                    break;
+                case SDL_Keycode.SDLK_z:
+                    controller1state |= held ? 0x80U : 00;
+                    break;
+                case SDL_Keycode.SDLK_x:
+                    controller1state |= held ? 0x40U : 00;
+                    break;
+            }
+
+            emu.Cpu.Controller[0] = controller1state;
+
+        }
+
         public static double GetTime()
         {
             return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
