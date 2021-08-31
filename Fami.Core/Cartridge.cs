@@ -8,6 +8,9 @@ namespace Fami.Core
     {
         Horizontal = 0,
         Vertical = 1,
+        All = 2, 
+        Upper = 3, 
+        Lower = 4
     }
 
     public class Cartridge

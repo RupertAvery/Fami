@@ -120,11 +120,13 @@ namespace Fami.Core.Mappers
             };
         }
 
+        private readonly MirrorEnum[] _mirroringModes = { MirrorEnum.Lower, MirrorEnum.Upper, MirrorEnum.Vertical, MirrorEnum.Horizontal };
+
         private void UpdateControl(uint value)
         {
             _control = value;
 
-            _cartridge.Mirror = (MirrorEnum)(value & 0x3);
+            _cartridge.Mirror = _mirroringModes[value & 0x3];
 
             _chrBankingMode = (CHRBankingMode)((value >> 4) & 0x1);
 
