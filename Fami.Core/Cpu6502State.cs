@@ -1,14 +1,49 @@
-﻿namespace Fami.Core
-{
-    public class Cpu6502State
-    {
-        public uint[] Controller { get; set; } = new uint[2];
-        public uint[] ControllerState { get; set; } = new uint[2];
+﻿using System.Runtime.CompilerServices;
 
-        public uint A { get; set; }
-        public uint X { get; set; }
-        public uint Y { get; set; }
-        public uint S { get; set; }
+namespace Fami.Core
+{
+    public struct CpuState
+    {
+        private uint[] RAM;
+        public uint A;
+        public uint X;
+        public uint Y;
+        public uint S;
+        public uint PC;
+
+        public uint N;  // bit 7
+        public uint V;  // bit 6
+        public uint U;  // bit 5
+        public uint B;  // bit 4
+        public uint D;  // bit 3
+        public uint I;  // bit 2
+        public uint Z;  // bit 1
+        public uint C;  // bit 0
+    }
+
+    public partial class Cpu6502State
+    {
+        public uint[] RAM = new uint[0x800];
+        public uint A;
+        public uint X;
+        public uint Y;
+        public uint S;
+
+        public uint PC;
+        public uint N;  // bit 7
+        public uint V;  // bit 6
+        public uint U;  // bit 5
+        public uint B;  // bit 4
+        public uint D;  // bit 3
+        public uint I;  // bit 2
+        public uint Z;  // bit 1
+        public uint C;  // bit 0
+
+        public uint cycles;
+        public uint instructions;
+
+        public uint[] Controller = new uint[2];
+        public uint[] ControllerState = new uint[2];
 
         public uint P
         {
@@ -36,32 +71,21 @@
             }
         }
 
-        public uint PC { get; set; }
+        public uint dma_page;
+        public uint dma_address;
+        public byte dma_data;
 
-        //public Cpu6502Memory Memory { get; set; }
-
-        public uint N { get; set; }  // bit 7
-        public uint V { get; set; }  // bit 6
-        public uint U { get; set; }  // bit 5
-        public uint B { get; set; }  // bit 4
-        public uint D { get; set; }  // bit 3
-        public uint I { get; set; }  // bit 2
-        public uint Z { get; set; }  // bit 1
-        public uint C { get; set; }  // bit 0
+        public bool dma_transfer;
+        public bool dma_dummy;
 
         public uint EffectiveAddr { get; set; }
         public bool PageBoundsCrossed { get; set; }
 
-        //public sbyte rel;
-        //public uint arg;
-        public uint cycles;
-        public uint instructions;
+        private Cartridge _cart;
 
-        public void Init()
-        {
-            //Memory = new Cpu6502Memory();
-            Ppu = new Ppu(this);
-        }
+        public bool NMI;
+        public Ppu Ppu { get; private set; }
+
 
         public void Reset()
         {
@@ -69,18 +93,12 @@
             cycles = 0;
             S = 0xFD;
             P = 0x24;
-            PC = Read(0xFFFC) + Read(0xFFFD) * 0x100;
+            PC = BusRead(0xFFFC) + BusRead(0xFFFD) * 0x100;
             cycles = 7;
             Ppu.Reset();
         }
 
-
-        private uint[] ram = new uint[0x800];
-        private Cartridge _cart;
-        public bool NMI;
-        public Ppu Ppu { get; private set; }
-
-        public uint Read(uint address)
+        public uint BusRead(uint address)
         {
             uint data = 0;
             var (val, handled) = _cart.CpuRead(address);
@@ -90,7 +108,7 @@
             }
             else if (address < 0x2000)
             {
-                data = ram[address & 0x07FF];
+                data = RAM[address & 0x07FF];
             }
             else if (address >= 0x2000 && address <= 0x3FFF)
             {
@@ -105,7 +123,7 @@
         }
 
 
-        public void Write(uint address, uint value)
+        public void BusWrite(uint address, uint value)
         {
             var handled = _cart.CpuWrite(address, value);
             if (handled)
@@ -114,7 +132,7 @@
             }
             else if (address >= 0x0000 && address <= 0x1FFF)
             {
-                ram[address & 0x07FF] = value;
+                RAM[address & 0x07FF] = value;
             }
             else if (address >= 0x2000 && address <= 0x3000)
             {
@@ -131,14 +149,7 @@
                 ControllerState[address & 0x1] = Controller[address & 01];
             }
         }
-
-        public uint dma_page;
-        public uint dma_address;
-        public uint dma_data;
-
-        public bool dma_transfer;
-        public bool dma_dummy;
-
+        
         public void LoadCartridge(Cartridge cart)
         {
             _cart = cart;
@@ -147,15 +158,31 @@
 
         public uint NonMaskableInterrupt()
         {
-            Cpu6502InstructionSet.Push(this, (PC >> 8) & 0xFF); // Push the high byte of the PC
-            Cpu6502InstructionSet.Push(this, (PC & 0xFF)); // Push the low byte of the PC
+            Push((PC >> 8) & 0xFF); // Push the high byte of the PC
+            Push((PC & 0xFF)); // Push the low byte of the PC
 
             B = 0;
             U = 1;
             I = 1;
-            Cpu6502InstructionSet.Push(this, P);
-            PC = Read(0xFFFA) + Read(0xFFFB) * 0x100; // Jump to NMI handler
+            Push(P);
+            PC = BusRead(0xFFFA) + BusRead(0xFFFB) * 0x100; // Jump to NMI handler
             return 8;
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public uint Push(uint value)
+        {
+            BusWrite(S + 0x100, value);
+            S -= 1;
+            return 0;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public uint Pop()
+        {
+            S += 1;
+            return BusRead(S + 0x100);
         }
     }
 }

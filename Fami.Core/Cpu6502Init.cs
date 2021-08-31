@@ -4,7 +4,7 @@ namespace Fami.Core
 {
     public static partial class Cpu6502InstructionSet
     {
-        public static Cpu6502Execute[] OpCodes { get; set; }
+        public static Cpu6502Execute[] OpCodes;
 
         public static void InitCpu()
         {
@@ -14,8 +14,6 @@ namespace Fami.Core
             {
                 OpCodes[i] = GetInstructionExecute(i);
             }
-
-
         }
 
         private static Cpu6502Execute GetInstructionExecute(int i)

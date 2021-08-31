@@ -4,61 +4,53 @@ using System.Text;
 
 namespace Fami.Core
 {
-    public class CpuEmu
+    public partial class Cpu6502State
     {
-        public Cpu6502State Cpu { get; private set; }
-
         private bool running;
         private StringBuilder log;
 
-        public CpuEmu()
+        public Cpu6502State()
         {
-            Cpu = new Cpu6502State();
             log = new StringBuilder();
         }
 
         public void Init()
         {
+            Ppu = new Ppu(this);
             running = true;
-            Cpu.Init();
             Cpu6502InstructionSet.InitCpu();
-        }
-
-        public void Reset()
-        {
-            Cpu.Reset();
         }
 
         public uint Step()
         {
             var cycles = 0U;
-            Cpu.Ppu.Clock();
+            Ppu.Clock();
 
-            if (Cpu.Ppu.cycles % 3 == 0)
+            if (Ppu.cycles % 3 == 0)
             {
-                if (Cpu.dma_transfer)
+                if (dma_transfer)
                 {
-                    if (Cpu.dma_dummy)
+                    if (dma_dummy)
                     {
-                        if (Cpu.Ppu.cycles % 2 == 1)
+                        if (Ppu.cycles % 2 == 1)
                         {
-                            Cpu.dma_dummy = false;
+                            dma_dummy = false;
                         }
                     }
                     else
                     {
-                        if (Cpu.Ppu.cycles % 2 == 0)
+                        if (Ppu.cycles % 2 == 0)
                         {
-                            Cpu.dma_data = Cpu.Read(Cpu.dma_page << 8 | Cpu.dma_address);
+                            dma_data = (byte)(BusRead(dma_page << 8 | dma_address));
                         }
                         else
                         {
-                            Cpu.Ppu.pOAM[Cpu.dma_address] = Cpu.dma_data;
-                            Cpu.dma_address++;
-                            if (Cpu.dma_address == 256)
+                            Ppu.pOAM[dma_address] = dma_data;
+                            dma_address++;
+                            if (dma_address == 256)
                             {
-                                Cpu.dma_transfer = false;
-                                Cpu.dma_dummy = true;
+                                dma_transfer = false;
+                                dma_dummy = true;
                             }
                         }
                     }
@@ -66,15 +58,15 @@ namespace Fami.Core
                 else
                 {
                     cycles = Dispatch();
-                    Cpu.cycles += cycles;
-                    Cpu.instructions++;
+                    cycles += cycles;
+                    instructions++;
                 }
             }
 
-            if (Cpu.NMI)
+            if (NMI)
             {
-                Cpu.NMI = false;
-                Cpu.cycles += Cpu.NonMaskableInterrupt();
+                NMI = false;
+                cycles += NonMaskableInterrupt();
             }
 
 
@@ -91,37 +83,37 @@ namespace Fami.Core
                 running = true;
                 while (running)
                 {
-                    Cpu.Ppu.Clock();
-                    if (Cpu.Ppu.cycles % 3 == 0)
+                    Ppu.Clock();
+                    if (Ppu.cycles % 3 == 0)
                     {
-                        Cpu.cycles += Dispatch();
-                        Cpu.instructions++;
+                        cycles += Dispatch();
+                        instructions++;
                     }
 
-                    //if (Cpu.cycles % 1000 == 0)
+                    //if (cycles % 1000 == 0)
                     //{
 
                     //    var sb = new StringBuilder();
                     //    uint i = 0;
-                    //    var chr = Cpu.Read(0x6000);
+                    //    var chr = BusRead(0x6000);
                     //    while (chr != 0)
                     //    {
                     //        sb.Append((char)chr);
                     //        i++;
-                    //        chr = Cpu.Read(0x6000 + i);
+                    //        chr = BusRead(0x6000 + i);
                     //    }
 
                     //    Console.WriteLine(sb.ToString());
                     //}
 
-                    if (Cpu.PC == 0x0001)
+                    if (PC == 0x0001)
                     {
                         running = false;
                     }
                 }
 
-                var l = Cpu.Read(02);
-                var h = Cpu.Read(03);
+                var l = BusRead(02);
+                var h = BusRead(03);
                 Console.WriteLine($"{l:X2}{h:X2}h");
 
                 File.WriteAllText("fami.log", log.ToString());
@@ -141,9 +133,9 @@ namespace Fami.Core
         /// <returns></returns>
         public uint Dispatch()
         {
-            var lastPC = Cpu.PC;
+            var lastPC = PC;
 
-            switch (Cpu.PC)
+            switch (PC)
             {
                 //case 0xC6BC:
                 //case 0xE928:
@@ -156,7 +148,7 @@ namespace Fami.Core
                     break;
             }
 
-            var ins = Cpu.Read(Cpu.PC);
+            var ins = BusRead(PC);
             var bytes = Cpu6502InstructionSet.bytes[ins];
 
             if (Debug)
@@ -171,44 +163,44 @@ namespace Fami.Core
                 case Cpu6502InstructionSet.IMP:
                     break;
                 case Cpu6502InstructionSet.IMM:
-                    Cpu.AddrModeImmediate();
+                    AddrModeImmediate();
                     break;
                 case Cpu6502InstructionSet.DP_:
-                    Cpu.AddrModeZeroPage();
+                    AddrModeZeroPage();
                     break;
                 case Cpu6502InstructionSet.DPX:
-                    Cpu.AddrModeZeroPageX();
+                    AddrModeZeroPageX();
                     break;
                 case Cpu6502InstructionSet.DPY:
-                    Cpu.AddrModeZeroPageY();
+                    AddrModeZeroPageY();
                     break;
                 case Cpu6502InstructionSet.IND:
                     if (ins == 0x6c)
                     {
-                        Cpu.AddrModeIndirect_JMP();
+                        AddrModeIndirect_JMP();
                     }
                     else
                     {
-                        Cpu.AddrModeIndirect();
+                        AddrModeIndirect();
                     }
                     break;
                 case Cpu6502InstructionSet.IDX:
-                    Cpu.AddrModeIndirectX();
+                    AddrModeIndirectX();
                     break;
                 case Cpu6502InstructionSet.IDY:
-                    Cpu.AddrModeIndirectY();
+                    AddrModeIndirectY();
                     break;
                 case Cpu6502InstructionSet.ABS:
-                    Cpu.AddrModeAbsolute();
+                    AddrModeAbsolute();
                     break;
                 case Cpu6502InstructionSet.ABX:
-                    Cpu.AddrModeAbsoluteX();
+                    AddrModeAbsoluteX();
                     break;
                 case Cpu6502InstructionSet.ABY:
-                    Cpu.AddrModeAbsoluteY();
+                    AddrModeAbsoluteY();
                     break;
                 case Cpu6502InstructionSet.REL:
-                    Cpu.AddrModeRelative();
+                    AddrModeRelative();
                     break;
                 default:
                     //File.WriteAllText("mario.log", log.ToString());
@@ -216,13 +208,13 @@ namespace Fami.Core
                     throw new NotImplementedException();
             }
 
-            Cpu.PC += bytes;
+            PC += bytes;
 
             var pcycles = Cpu6502InstructionSet.cycles[ins];
 
-            pcycles += Cpu6502InstructionSet.OpCodes[ins](Cpu);
+            pcycles += Cpu6502InstructionSet.OpCodes[ins](this);
 
-            if (Cpu.PageBoundsCrossed)
+            if (PageBoundsCrossed)
             {
                 switch (ins)
                 {
@@ -278,7 +270,7 @@ namespace Fami.Core
                         pcycles++;
                         break;
                 }
-                Cpu.PageBoundsCrossed = false;
+                PageBoundsCrossed = false;
             }
 
             switch (ins)
@@ -300,7 +292,7 @@ namespace Fami.Core
             var sb = new StringBuilder();
             for (var i = 0u; i < bytes; i++)
             {
-                sb.Append($"{Cpu.Read(Cpu.PC + i):X2} ");
+                sb.Append($"{BusRead(PC + i):X2} ");
             }
 
             for (var i = 0; i < 3 - bytes; i++)
@@ -308,18 +300,9 @@ namespace Fami.Core
                 sb.Append($"   ");
             }
 
-            log.AppendLine($"{Cpu.PC:X4}  {sb} A:{Cpu.A:X2} X:{Cpu.X:X2} Y:{Cpu.Y:X2} P:{Cpu.P:X2} SP:{Cpu.S:X2} CYC:{Cpu.cycles}");
+            log.AppendLine($"{PC:X4}  {sb} A:{A:X2} X:{X:X2} Y:{Y:X2} P:{P:X2} SP:{S:X2} CYC:{cycles}");
 
         }
 
-        public void LoadCartridge(Cartridge cart)
-        {
-            Cpu.LoadCartridge(cart);
-        }
-
-        public void Pause()
-        {
-            throw new NotImplementedException();
-        }
     }
 }

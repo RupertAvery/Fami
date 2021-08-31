@@ -110,10 +110,10 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint BRK(Cpu6502State cpu)
         {
-            cpu.Write(cpu.S, (byte)(cpu.PC & 0xff));
-            cpu.Write(cpu.S + 1, (byte)((cpu.PC >> 8) & 0xff));
+            cpu.BusWrite(cpu.S, (byte)(cpu.PC & 0xff));
+            cpu.BusWrite(cpu.S + 1, (byte)((cpu.PC >> 8) & 0xff));
             var flags = cpu.P | 0b00110100;
-            cpu.Write(cpu.S + 2, flags);
+            cpu.BusWrite(cpu.S + 2, flags);
             cpu.S += 3;
             return 0;
         }
@@ -122,7 +122,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint ORA(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             cpu.A = arg | cpu.A;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
@@ -132,7 +132,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint AND(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             cpu.A = arg & cpu.A;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
@@ -154,22 +154,22 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint ASL_Mem(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             arg = arg << 1;
             cpu.C = (arg >> 8) & 1;
             arg = arg & 0xFF;
             TestN(arg, cpu);
             TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
             return 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint PHP(Cpu6502State cpu)
         {
-            Push(cpu, cpu.P | 0b00110000);
-            //cpu.Write(cpu.S + 0x100, flags);
+            cpu.Push(cpu.P | 0b00110000);
+            //cpu.BusWrite(cpu.S + 0x100, flags);
             //cpu.S -= 1;
             return 0;
         }
@@ -185,20 +185,6 @@ namespace Fami.Core
             return 0;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static uint Push(Cpu6502State cpu, uint value)
-        {
-            cpu.Write(cpu.S + 0x100, value);
-            cpu.S -= 1;
-            return 0;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static uint Pop(Cpu6502State cpu)
-        {
-            cpu.S += 1;
-            return cpu.Read(cpu.S + 0x100);
-        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint CLC(Cpu6502State cpu)
@@ -212,10 +198,10 @@ namespace Fami.Core
         {
             // PC already points to the address AFTER the last byte of the instruction, so subtract 1
             var pc = cpu.PC - 1;
-            Push(cpu, (pc >> 8) & 0xFF);
-            Push(cpu, pc & 0xFF);
-            //cpu.Write(0x100 + cpu.S, (pc >> 8) & 0xFF);
-            //cpu.Write(0x100 + cpu.S - 1, pc & 0xFF);
+            cpu.Push((pc >> 8) & 0xFF);
+            cpu.Push(pc & 0xFF);
+            //cpu.BusWrite(0x100 + cpu.S, (pc >> 8) & 0xFF);
+            //cpu.BusWrite(0x100 + cpu.S - 1, pc & 0xFF);
             //cpu.S -= 2;
             cpu.PC = cpu.EffectiveAddr;
             return 0;
@@ -224,7 +210,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint BIT(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             TestN(arg, cpu);
             TestV(arg, cpu);
             TestZ(cpu.A & arg, cpu);
@@ -245,13 +231,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint ROL_Mem(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = cpu.C;
             cpu.C = (arg >> 7) & 1;
             arg = ((arg << 1) | temp & 1) & 0xFF;
             TestN(arg, cpu);
             TestZ(arg, cpu);
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
             return 0;
         }
 
@@ -259,10 +245,10 @@ namespace Fami.Core
         public static uint PLP(Cpu6502State cpu)
         {
             //cpu.S += 1;
-            //cpu.P = cpu.Read(cpu.S) | 0b00100000;
-            //cpu.P = Pop(cpu) | 0b00100000;
-            //cpu.P = Pop(cpu) | 0b00110000;
-            cpu.P = Pop(cpu);
+            //cpu.P = cpu.BusRead(cpu.S) | 0b00100000;
+            //cpu.P = cpu.Pop() | 0b00100000;
+            //cpu.P = cpu.Pop() | 0b00110000;
+            cpu.P = cpu.Pop();
             cpu.B = 0;
             cpu.U = 1;
             return 0;
@@ -290,19 +276,19 @@ namespace Fami.Core
         public static uint RTI(Cpu6502State cpu)
         {
             //The status register is pulled with the break flag and bit 5 ignored.
-            cpu.P = Pop(cpu);
+            cpu.P = cpu.Pop();
             cpu.B = 0;
             cpu.U = 1;   // FCEUX sets this bit to 1 on RTI?
             // Then PC is pulled from the stack.
-            cpu.PC = Pop(cpu);
-            cpu.PC += Pop(cpu) * 0x100;
+            cpu.PC = cpu.Pop();
+            cpu.PC += cpu.Pop() * 0x100;
             return 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint EOR(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             cpu.A ^= arg;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
@@ -322,21 +308,21 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint LSR_Mem(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             cpu.C = arg & 1;
             arg = (arg >> 1) & 0xFF;
             cpu.N = 0;
             TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
             return 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint PHA(Cpu6502State cpu)
         {
-            Push(cpu, cpu.A);
-            //cpu.Write(cpu.S, cpu.A);
+            cpu.Push(cpu.A);
+            //cpu.BusWrite(cpu.S, cpu.A);
             //cpu.S--;
             return 0;
         }
@@ -368,13 +354,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint RTS(Cpu6502State cpu)
         {
-            cpu.PC = Pop(cpu);
-            cpu.PC += Pop(cpu) * 0x100;
+            cpu.PC = cpu.Pop();
+            cpu.PC += cpu.Pop() * 0x100;
 
             //cpu.S += 1;
-            //cpu.PC = cpu.Read(cpu.S + 0x100);
+            //cpu.PC = cpu.BusRead(cpu.S + 0x100);
             //cpu.S += 1;
-            //cpu.PC += cpu.Read(cpu.S + 0x100) * 0x100;
+            //cpu.PC += cpu.BusRead(cpu.S + 0x100) * 0x100;
             cpu.PC++;
             return 0;
         }
@@ -382,7 +368,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint ADC(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
 
             var temp = arg + cpu.A + cpu.C;
 
@@ -411,22 +397,22 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint ROR_Mem(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = cpu.C;
             cpu.C = arg & 1;
             arg = ((arg >> 1) | temp << 7) & 0xFF;
             TestN(arg, cpu);
             TestZ(arg, cpu);
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
             return 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint PLA(Cpu6502State cpu)
         {
-            cpu.A = Pop(cpu);
+            cpu.A = cpu.Pop();
             //cpu.S += 1;
-            //cpu.A = cpu.Read(cpu.S);
+            //cpu.A = cpu.BusRead(cpu.S);
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
             return 0;
@@ -453,21 +439,21 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint STA(Cpu6502State cpu)
         {
-            cpu.Write(cpu.EffectiveAddr, cpu.A);
+            cpu.BusWrite(cpu.EffectiveAddr, cpu.A);
             return 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint STY(Cpu6502State cpu)
         {
-            cpu.Write(cpu.EffectiveAddr, cpu.Y);
+            cpu.BusWrite(cpu.EffectiveAddr, cpu.Y);
             return 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint STX(Cpu6502State cpu)
         {
-            cpu.Write(cpu.EffectiveAddr, cpu.X);
+            cpu.BusWrite(cpu.EffectiveAddr, cpu.X);
             return 0;
         }
 
@@ -521,7 +507,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint LDY(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             cpu.Y = arg;
             TestN(cpu.Y, cpu);
             TestZ(cpu.Y, cpu);
@@ -531,7 +517,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint LDA(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             cpu.A = arg & 0xFF;
             TestN(cpu.A, cpu);
             TestZ(cpu.A, cpu);
@@ -541,7 +527,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint LDX(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             cpu.X = arg;
             TestN(cpu.X, cpu);
             TestZ(cpu.X, cpu);
@@ -580,7 +566,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint GetRel(Cpu6502State cpu)
         {
-            var rel = cpu.Read(cpu.EffectiveAddr);
+            var rel = cpu.BusRead(cpu.EffectiveAddr);
             if ((rel & 0x80) == 0x80)
             {
                 rel |= 0xFFFFFF80;
@@ -625,7 +611,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint CPY(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = cpu.Y - arg;
             cpu.C = cpu.Y >= arg ? 1U : 0;
             TestN(temp & 0xFFFF, cpu);
@@ -636,7 +622,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint CMP(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = cpu.A - arg;
             cpu.C = cpu.A >= arg ? 1U : 0;
             TestN(temp & 0xFF, cpu);
@@ -647,14 +633,14 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint DEC(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = arg - 1;
             temp &= 0xff;
 
             TestN(temp, cpu);
             TestZ(temp, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, temp);
+            cpu.BusWrite(cpu.EffectiveAddr, temp);
             return 0;
         }
 
@@ -699,7 +685,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint CPX(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = cpu.X - arg;
             cpu.C = cpu.X >= arg ? 1U : 0U;
             TestN(temp & 0xFF, cpu);
@@ -710,7 +696,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint SBC(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = cpu.A - arg - ((cpu.C ^ 1) & 1);
 
             // Stolen from FCEUX
@@ -727,7 +713,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint INC(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             arg += 1;
             if (arg > 0xff)
             {
@@ -736,7 +722,7 @@ namespace Fami.Core
             TestN(arg, cpu);
             TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
 
             return 0;
         }
@@ -785,14 +771,14 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint SLO(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             arg = arg << 1;
             cpu.C = (arg >> 8) & 1;
             arg = arg & 0xFF;
             //TestN(arg, cpu);
             //TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
 
             cpu.A = arg | cpu.A;
             TestN(cpu.A, cpu);
@@ -803,13 +789,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint SRE(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             cpu.C = arg & 1;
             arg = (arg >> 1) & 0xFF;
             //cpu.N = 0;
             //TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
 
             cpu.A ^= arg;
             TestN(cpu.A, cpu);
@@ -820,7 +806,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint USB(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             // Technically the same as SBC Immediate/E9
             var temp = cpu.A - arg - ((cpu.C ^ 1) & 1);
 
@@ -844,7 +830,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint LAX(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             cpu.A = arg;
             cpu.X = arg;
             TestN(cpu.A, cpu);
@@ -856,21 +842,21 @@ namespace Fami.Core
         public static uint SAX(Cpu6502State cpu)
         {
             var temp = cpu.A & cpu.X;
-            cpu.Write(cpu.EffectiveAddr, temp);
+            cpu.BusWrite(cpu.EffectiveAddr, temp);
             return 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint DCP(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = arg - 1;
             temp &= 0xff;
 
             //TestN(temp, cpu);
             //TestZ(temp, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, temp);
+            cpu.BusWrite(cpu.EffectiveAddr, temp);
 
             var temp2 = cpu.A - temp;
             cpu.C = cpu.A >= temp ? 1U : 0;
@@ -883,7 +869,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint ISC(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             arg += 1;
             if (arg > 0xff)
             {
@@ -892,7 +878,7 @@ namespace Fami.Core
             //TestN(arg, cpu);
             //TestZ(arg, cpu);
 
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
 
             var temp = cpu.A - arg - ((cpu.C ^ 1) & 1);
 
@@ -910,13 +896,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint RLA(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = cpu.C;
             cpu.C = (arg >> 7) & 1;
             arg = ((arg << 1) | temp & 1) & 0xFF;
             //TestN(arg, cpu);
             //TestZ(arg, cpu);
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
 
             cpu.A = arg & cpu.A;
             TestN(cpu.A, cpu);
@@ -939,13 +925,13 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint RRA(Cpu6502State cpu)
         {
-            var arg = cpu.Read(cpu.EffectiveAddr);
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
             var temp = cpu.C;
             cpu.C = arg & 1;
             arg = ((arg >> 1) | temp << 7) & 0xFF;
             //TestN(arg, cpu);
             //TestZ(arg, cpu);
-            cpu.Write(cpu.EffectiveAddr, arg);
+            cpu.BusWrite(cpu.EffectiveAddr, arg);
 
             var temp2 = arg + cpu.A + cpu.C;
 

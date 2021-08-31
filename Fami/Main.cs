@@ -20,12 +20,20 @@ namespace Fami
         public bool IntegerScaling { get; set; }
         static IntPtr Texture;
         public bool ColorCorrection { get; set; }
-        private CpuEmu emu;
+        private Cpu6502State nes;
+        public PpuState[] PpuStates = new PpuState[256];
+        public uint ppuStateTail = 0;
+        public uint ppuStateHead = 0;
+        public uint Frames;
 
         public Main()
         {
+            for (var i = 0; i < 256; i++)
+            {
+                PpuStates[i] = PpuState.New();
+            }
 
-            emu = new CpuEmu();
+            nes = new Cpu6502State();
 
             SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO);
 
@@ -66,7 +74,7 @@ namespace Fami
             {
                 for (var x = 0; x < WIDTH; x++)
                 {
-                    var p = emu.Cpu.Ppu.Renderer.buffer[x + y * WIDTH];
+                    var p = nes.Ppu.buffer[x + y * WIDTH];
                     //var r = p >> 16 & 0xFF;
                     //var g = p >> 8 & 0xFF;
                     //var b = p & 0xFF;
@@ -172,28 +180,40 @@ namespace Fami
             CyclesLeft += CyclesPerFrame;
             while (CyclesLeft > 0)
             {
-                CyclesLeft -= (int)emu.Step();
+                CyclesLeft -= (int)nes.Step();
             }
+
+            if (Frames % 4 == 0)
+            {
+                nes.Ppu.WriteState(ref PpuStates[ppuStateHead]);
+                ppuStateHead++;
+                if (ppuStateHead > 255)
+                {
+                    ppuStateHead = 0;
+                }
+            }
+
+            Frames++;
         }
 
         public void Test()
         {
-            emu.Init();
-            var cart = Cartridge.Load("nestest.nes", emu.Cpu);
-            emu.LoadCartridge(cart);
-            emu.Reset();
-            emu.Cpu.PC = 0xC000;
-            emu.Execute();
+            nes.Init();
+            var cart = Cartridge.Load("nestest.nes", nes);
+            nes.LoadCartridge(cart);
+            nes.Reset();
+            nes.PC = 0xC000;
+            nes.Execute();
         }
 
         public void Load(string rompath)
         {
             Cartridge cart = null;
-            emu.Init();
+            nes.Init();
             if (Path.GetExtension(rompath).ToLower() == ".zip")
             {
                 using var zipFile = ZipFile.Open(rompath, ZipArchiveMode.Read);
-                var nesFile = zipFile.Entries.FirstOrDefault(z=> Path.GetExtension(z.Name).ToLower() == ".nes");
+                var nesFile = zipFile.Entries.FirstOrDefault(z => Path.GetExtension(z.Name).ToLower() == ".nes");
                 if (nesFile == default)
                 {
 
@@ -201,15 +221,15 @@ namespace Fami
                 else
                 {
                     using var s = nesFile.Open();
-                    cart = Cartridge.Load(s, emu.Cpu);
+                    cart = Cartridge.Load(s, nes);
                 }
             }
             else
             {
-                cart = Cartridge.Load(rompath, emu.Cpu);
+                cart = Cartridge.Load(rompath, nes);
             }
-            emu.LoadCartridge(cart);
-            emu.Reset();
+            nes.LoadCartridge(cart);
+            nes.Reset();
         }
 
         private bool running;
@@ -271,40 +291,56 @@ namespace Fami
                     resetPending = false;
                 }
 
-                double currentSec = GetTime();
 
-                // Reset time if behind schedule
-                if (currentSec - nextFrameAt >= SecondsPerFrame)
+                if (Pause)
                 {
-                    double diff = currentSec - nextFrameAt;
-                    Console.WriteLine("Can't keep up! Skipping " + (int)(diff * 1000) + " milliseconds");
-                    nextFrameAt = currentSec;
+                    if (FrameAdvance)
+                    {
+                        FrameAdvance = false;
+                        RunFrame();
+                    }
+                }
+                else
+                {
+                    double currentSec = GetTime();
+
+                    // Reset time if behind schedule
+                    if (currentSec - nextFrameAt >= SecondsPerFrame)
+                    {
+                        double diff = currentSec - nextFrameAt;
+                        Console.WriteLine("Can't keep up! Skipping " + (int)(diff * 1000) + " milliseconds");
+                        nextFrameAt = currentSec;
+                    }
+
+                    if (currentSec >= nextFrameAt)
+                    {
+                        nextFrameAt += SecondsPerFrame;
+
+                        ThreadSync.Set();
+                    }
+
+                    if (currentSec >= fpsEvalTimer)
+                    {
+                        double diff = currentSec - fpsEvalTimer + 1;
+                        double frames = CyclesRan / CyclesPerFrame;
+                        CyclesRan = 0;
+
+                        //double mips = (double)Gba.Cpu.InstructionsRan / 1000000D;
+                        //Gba.Cpu.InstructionsRan = 0;
+
+                        // Use Math.Floor to truncate to 2 decimal places
+                        Fps = Math.Floor((frames / diff) * 100) / 100;
+                        //Mips = Math.Floor((mips / diff) * 100) / 100;
+                        UpdateTitle();
+                        //Seconds++;
+
+                        fpsEvalTimer += 1;
+                    }
                 }
 
-                if (currentSec >= nextFrameAt)
-                {
-                    nextFrameAt += SecondsPerFrame;
 
-                    ThreadSync.Set();
-                }
 
-                if (currentSec >= fpsEvalTimer)
-                {
-                    double diff = currentSec - fpsEvalTimer + 1;
-                    double frames = CyclesRan / CyclesPerFrame;
-                    CyclesRan = 0;
 
-                    //double mips = (double)Gba.Cpu.InstructionsRan / 1000000D;
-                    //Gba.Cpu.InstructionsRan = 0;
-
-                    // Use Math.Floor to truncate to 2 decimal places
-                    Fps = Math.Floor((frames / diff) * 100) / 100;
-                    //Mips = Math.Floor((mips / diff) * 100) / 100;
-                    UpdateTitle();
-                    //Seconds++;
-
-                    fpsEvalTimer += 1;
-                }
 
                 Draw();
             }
@@ -322,6 +358,9 @@ namespace Fami
         }
 
         private uint controller1state = 0;
+
+        private bool Pause;
+        private bool FrameAdvance;
 
         private void KeyEvent(SDL_KeyboardEvent evtKey)
         {
@@ -356,10 +395,21 @@ namespace Fami
                         controller1state |= 0x40U;
                         break;
                     case SDL_Keycode.SDLK_ESCAPE:
-                        emu.Reset();
+                        nes.Reset();
                         break;
                     case SDL_Keycode.SDLK_SPACE:
                         Sync = false;
+                        break;
+                    case SDL_Keycode.SDLK_p:
+                        Pause = !Pause;
+                        Console.WriteLine(Pause ? "Paused" : "Resumed");
+                        break;
+                    case SDL_Keycode.SDLK_f:
+                        if (Pause)
+                        {
+                            Console.WriteLine("Frame Advanced");
+                            FrameAdvance = true;
+                        }
                         break;
                 }
             }
@@ -400,7 +450,7 @@ namespace Fami
                 }
             }
 
-            emu.Cpu.Controller[0] = controller1state;
+            nes.Controller[0] = controller1state;
 
         }
 
