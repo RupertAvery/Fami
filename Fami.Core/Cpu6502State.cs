@@ -1,26 +1,8 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace Fami.Core
 {
-    public struct CpuState
-    {
-        private uint[] RAM;
-        public uint A;
-        public uint X;
-        public uint Y;
-        public uint S;
-        public uint PC;
-
-        public uint N;  // bit 7
-        public uint V;  // bit 6
-        public uint U;  // bit 5
-        public uint B;  // bit 4
-        public uint D;  // bit 3
-        public uint I;  // bit 2
-        public uint Z;  // bit 1
-        public uint C;  // bit 0
-    }
-
     public partial class Cpu6502State
     {
         public uint[] RAM = new uint[0x800];
@@ -41,6 +23,14 @@ namespace Fami.Core
 
         public uint cycles;
         public uint instructions;
+
+
+        public uint dma_page;
+        public uint dma_address;
+        public byte dma_data;
+
+        public bool dma_transfer;
+        public bool dma_dummy;
 
         public uint[] Controller = new uint[2];
         public uint[] ControllerState = new uint[2];
@@ -71,26 +61,60 @@ namespace Fami.Core
             }
         }
 
-        public uint dma_page;
-        public uint dma_address;
-        public byte dma_data;
 
-        public bool dma_transfer;
-        public bool dma_dummy;
+        public uint EffectiveAddr;
+        public bool PageBoundsCrossed;
 
-        public uint EffectiveAddr { get; set; }
-        public bool PageBoundsCrossed { get; set; }
-
-        private Cartridge _cart;
+        public Cartridge Cartridge;
 
         public bool NMI;
-        public Ppu Ppu { get; private set; }
+        public Ppu Ppu;
 
+        public void WriteState(ref CpuState state)
+        {
+            Array.Copy(RAM, state.RAM, RAM.Length);
+            state.A = A;
+            state.X = X;
+            state.Y = Y;
+            state.S = S;
+
+            state.PC = PC;
+            state.N = N;  // bit 7
+            state.V = V;  // bit 6
+            state.U = U;  // bit 5
+            state.B = B;  // bit 4
+            state.D = D;  // bit 3
+            state.I = I;  // bit 2
+            state.Z = Z;  // bit 1
+            state.C = C;  // bit 0
+
+            state.cycles = cycles;
+        }
+
+        public void ReadState(CpuState state)
+        {
+            Array.Copy(state.RAM, RAM, RAM.Length);
+            A = state.A;
+            X = state.X;
+            Y = state.Y;
+            S = state.S;
+
+            PC = state.PC;
+            N = state.N;  // bit 7
+            V = state.V;  // bit 6
+            U = state.U;  // bit 5
+            B = state.B;  // bit 4
+            D = state.D;  // bit 3
+            I = state.I;  // bit 2
+            Z = state.Z;  // bit 1
+            C = state.C;  // bit 0
+
+            cycles = state.cycles;
+        }
 
         public void Reset()
         {
             // https://www.pagetable.com/?p=410
-            cycles = 0;
             S = 0xFD;
             P = 0x24;
             PC = BusRead(0xFFFC) + BusRead(0xFFFD) * 0x100;
@@ -101,7 +125,7 @@ namespace Fami.Core
         public uint BusRead(uint address)
         {
             uint data = 0;
-            var (val, handled) = _cart.CpuRead(address);
+            var (val, handled) = Cartridge.CpuRead(address);
             if (handled)
             {
                 data = val;
@@ -125,7 +149,7 @@ namespace Fami.Core
 
         public void BusWrite(uint address, uint value)
         {
-            var handled = _cart.CpuWrite(address, value);
+            var handled = Cartridge.CpuWrite(address, value);
             if (handled)
             {
 
@@ -143,18 +167,20 @@ namespace Fami.Core
                 dma_page = value;
                 dma_address = 0x00;
                 dma_transfer = true;
+                //dma_dummy = cycles % 2 == 1;
+                //for (uint i = 0; i <= 255; i++)
+                //{
+                //    var _dma_data = (byte)(BusRead(dma_page << 8 | i));
+                //    Ppu.pOAM[i] = _dma_data;
+                //}
+                //cycles += 513 + cycles % 2;
             }
             else if (address >= 0x4016 && address <= 0x4017)
             {
                 ControllerState[address & 0x1] = Controller[address & 01];
             }
         }
-        
-        public void LoadCartridge(Cartridge cart)
-        {
-            _cart = cart;
-            Ppu.LoadCartridge(cart);
-        }
+
 
         public uint NonMaskableInterrupt()
         {

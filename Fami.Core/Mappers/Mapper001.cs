@@ -186,5 +186,14 @@ namespace Fami.Core.Mappers
                 _chrBankOffsets[bank] = value * 0x1000;
             }
         }
+
+        public override void WriteState(ref byte[] buffer)
+        {
+
+        }
+        public override void ReadState(byte[] buffer)
+        {
+
+        }
     }
 }

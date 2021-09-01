@@ -2,7 +2,7 @@
   "profiles": {
     "Fami": {
       "commandName": "Project",
-      "commandLineArgs": "\"D:\\roms\\NES\\The Legend of Zelda.zip\""
+      "commandLineArgs": "\"D:\\roms\\NES\\nes-test-roms\\scanline\\scanline.nes\""
     }
   }
 }

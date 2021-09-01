@@ -38,5 +38,14 @@
             return false;
         }
 
+        public override void WriteState(ref byte[] buffer)
+        {
+
+        }
+        public override void ReadState(byte[] buffer)
+        {
+
+        }
+
     }
 }

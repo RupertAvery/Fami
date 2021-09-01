@@ -1,5 +1,4 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using Fami.Core.Mappers;
 
 namespace Fami.Core
@@ -104,15 +103,15 @@ namespace Fami.Core
         {
             return Mapper.PpuMapWrite(address, value);
         }
-    }
 
-    public class UnsupportedMapperException : Exception
-    {
-        private readonly int _mapperId;
-
-        public UnsupportedMapperException(int mapperId) : base($"Unsupported Mapper {mapperId}")
+        public void WriteState(ref byte[] buffer)
         {
-            _mapperId = mapperId;
+            Mapper.WriteState(ref buffer);
+        }
+
+        public void ReadState(byte[] buffer)
+        {
+            Mapper.ReadState(buffer);
         }
     }
 }

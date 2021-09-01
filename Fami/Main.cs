@@ -22,9 +22,32 @@ namespace Fami
         public bool ColorCorrection { get; set; }
         private Cpu6502State nes;
         public PpuState[] PpuStates = new PpuState[256];
+        public CpuState CpuState;
+        public PpuState PpuState;
+        public byte[] MapperState = new byte[16384];
+
         public uint ppuStateTail = 0;
         public uint ppuStateHead = 0;
         public uint Frames;
+        public bool hasState;
+
+        public void SaveState()
+        {
+            nes.WriteState(ref CpuState);
+            nes.Ppu.WriteState(ref PpuState);
+            nes.Cartridge.WriteState(ref  MapperState);
+            hasState = true;
+        }
+
+        public void LoadState()
+        {
+            if (hasState)
+            {
+                nes.ReadState(CpuState);
+                nes.Ppu.ReadState(PpuState);
+                nes.Cartridge.ReadState(MapperState);
+            }
+        }
 
         public Main()
         {
@@ -32,6 +55,10 @@ namespace Fami
             {
                 PpuStates[i] = PpuState.New();
             }
+
+            CpuState = CpuState.New();
+            PpuState = PpuState.New();
+
 
             nes = new Cpu6502State();
 
@@ -141,7 +168,8 @@ namespace Fami
         static Thread EmulationThread;
         static AutoResetEvent ThreadSync = new AutoResetEvent(false);
         private static bool Sync = true;
-
+        private bool SaveStatePending;
+        private bool LoadStatePending;
         public void EmulationThreadHandler()
         {
             try
@@ -153,6 +181,16 @@ namespace Fami
                     while (!Sync)
                     {
                         RunFrame();
+                    }
+                    if (SaveStatePending)
+                    {
+                        SaveState();
+                        SaveStatePending = false;
+                    }
+                    if (LoadStatePending)
+                    {
+                        LoadState();
+                        LoadStatePending = false;
                     }
                 }
             }
@@ -176,12 +214,27 @@ namespace Fami
 
         public void RunFrame()
         {
-            CyclesRan += CyclesPerFrame;
-            CyclesLeft += CyclesPerFrame;
-            while (CyclesLeft > 0)
+            //CyclesRan += CyclesPerFrame;
+            //CyclesLeft += CyclesPerFrame;
+            //while (CyclesLeft > 0)
+            //{
+            //    CyclesLeft -= (int)nes.Step();
+            //}
+            //89342
+            //CyclesLeft = 89341 + ((Frames % 2 == 0 )? 1 : 0);
+            //while (CyclesLeft > 0)
+            //{
+            //    CyclesLeft -= (int)nes.Step();
+            //}
+
+            for (var i = -1; i < 261; i++)
             {
-                CyclesLeft -= (int)nes.Step();
+                for (var j = 0; j < 341; j++)
+                {
+                    nes.Step();
+                }
             }
+
 
             if (Frames % 4 == 0)
             {
@@ -399,6 +452,12 @@ namespace Fami
                         break;
                     case SDL_Keycode.SDLK_SPACE:
                         Sync = false;
+                        break;
+                    case SDL_Keycode.SDLK_F2:
+                        SaveStatePending = true;
+                        break;
+                    case SDL_Keycode.SDLK_F4:
+                        LoadStatePending = true;
                         break;
                     case SDL_Keycode.SDLK_p:
                         Pause = !Pause;

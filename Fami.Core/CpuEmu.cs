@@ -21,9 +21,17 @@ namespace Fami.Core
             Cpu6502InstructionSet.InitCpu();
         }
 
+
+        public void LoadCartridge(Cartridge cart)
+        {
+            Cartridge = cart;
+            Ppu.LoadCartridge(cart);
+        }
+
+        private int ticksleft;
+
         public uint Step()
         {
-            var cycles = 0U;
             Ppu.Clock();
 
             if (Ppu.cycles % 3 == 0)
@@ -57,16 +65,11 @@ namespace Fami.Core
                 }
                 else
                 {
-                    cycles = Dispatch();
-                    cycles += cycles;
+                    if (ticksleft-- > 0) return 1;
+                    ticksleft += (int)Dispatch();
+                    cycles += (uint)ticksleft;
                     instructions++;
                 }
-            }
-
-            if (NMI)
-            {
-                NMI = false;
-                cycles += NonMaskableInterrupt();
             }
 
 
@@ -83,12 +86,7 @@ namespace Fami.Core
                 running = true;
                 while (running)
                 {
-                    Ppu.Clock();
-                    if (Ppu.cycles % 3 == 0)
-                    {
-                        cycles += Dispatch();
-                        instructions++;
-                    }
+                    Step();
 
                     //if (cycles % 1000 == 0)
                     //{
@@ -133,20 +131,29 @@ namespace Fami.Core
         /// <returns></returns>
         public uint Dispatch()
         {
+
+            if (NMI)
+            {
+                NMI = false;
+                NonMaskableInterrupt();
+                return 0;
+            }
+
+
             var lastPC = PC;
 
-            switch (PC)
-            {
-                //case 0xC6BC:
-                //case 0xE928:
-                case 0xF2FC:
-                    //case 0xFA4D:
-                    //case 0xC79B:
-                    //case 0xF55E:
-                    //case 0xFAF1:
-                    var x = 1;
-                    break;
-            }
+            //switch (PC)
+            //{
+            //    //case 0xC6BC:
+            //    //case 0xE928:
+            //    case 0xF2FC:
+            //        //case 0xFA4D:
+            //        //case 0xC79B:
+            //        //case 0xF55E:
+            //        //case 0xFAF1:
+            //        var x = 1;
+            //        break;
+            //}
 
             var ins = BusRead(PC);
             var bytes = Cpu6502InstructionSet.bytes[ins];
@@ -300,7 +307,7 @@ namespace Fami.Core
                 sb.Append($"   ");
             }
 
-            log.AppendLine($"{PC:X4}  {sb} A:{A:X2} X:{X:X2} Y:{Y:X2} P:{P:X2} SP:{S:X2} CYC:{cycles}");
+            log.AppendLine($"{PC:X4}  {sb} A:{A:X2} X:{X:X2} Y:{Y:X2} P:{P:X2} SP:{S:X2} PPU:{Ppu.scanline + 1},{Ppu.cycle} CYC:{cycles}");
 
         }
 

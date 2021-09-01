@@ -1,97 +1,10 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography.X509Certificates;
 
 namespace Fami.Core
 {
-
-    public class SpriteScanline
-    {
-        public uint X { get; set; }
-        public uint Y { get; set; }
-        public uint Attribute { get; set; }
-        public uint Id { get; set; }
-    }
-
-    public struct PpuState
-    {
-        public static PpuState New()
-        {
-            return new PpuState()
-            {
-                //buffer = new uint[256 * 240],
-                ppu_status = default,
-                ppu_control = default,
-                ppu_mask = default,
-                vram_addr = default,
-                tram_addr = default,
-                tblName = new byte[2, 1024],
-                tblPalette = new byte[32],
-                //tblPattern = new uint[,],
-                fine_x = 0,
-                cycles = 0,
-                cycle = 0,
-                scanline = 0,
-                pOAM = new uint[256],
-                bg_shifter_pattern_lo = 0,
-                bg_next_tile_lsb = 0,
-                bg_shifter_pattern_hi = 0,
-                bg_next_tile_msb = 0,
-                bg_shifter_attrib_lo = 0,
-                bg_shifter_attrib_hi = 0,
-                bg_next_tile_attrib = 0,
-                bg_next_tile_id = 0,
-                address_latch = 0,
-                ppu_data_buffer = 0,
-                oam_addr = 0,
-                sprite_count = 0,
-                bSpriteZeroBeingRendered = false,
-                bSpriteZeroHitPossible = false,
-                spriteScanline = new SpriteScanline[64],
-                sprite_shifter_pattern_lo = new uint[64],
-                sprite_shifter_pattern_hi = new uint[64],
-            };
-        }
-
-        //public uint[] buffer;
-        public StatusRegister ppu_status;
-        public ControlRegister ppu_control;
-        public MaskRegister ppu_mask;
-        public LoopyRegister vram_addr;
-        public LoopyRegister tram_addr;
-
-        public byte[,] tblName;
-        public byte[] tblPalette;
-        public uint[,] tblPattern;
-
-        public uint fine_x;
-        public ulong cycles;
-        public int cycle;
-        public int scanline;
-        public uint[] pOAM;
-        public uint bg_shifter_pattern_lo;
-        public uint bg_next_tile_lsb;
-        public uint bg_shifter_pattern_hi;
-        public uint bg_next_tile_msb;
-        public uint bg_shifter_attrib_lo;
-        public uint bg_shifter_attrib_hi;
-        public uint bg_next_tile_attrib;
-        public uint bg_next_tile_id;
-        public uint address_latch;
-        public uint ppu_data_buffer;
-        public uint oam_addr;
-        public uint sprite_count;
-        public bool bSpriteZeroBeingRendered;
-        public bool bSpriteZeroHitPossible;
-        public SpriteScanline[] spriteScanline;
-        public uint[] sprite_shifter_pattern_lo;
-        public uint[] sprite_shifter_pattern_hi;
-    }
-
-
     public class Ppu
     {
-        private const uint SpriteLimit = 64;
+        private const uint SpriteLimit = 8;
         private const uint PPUCTRL = 0x2000;
         private const uint PPUMASK = 0x2001;
         private const uint PPUSTATUS = 0x2002;
@@ -113,12 +26,12 @@ namespace Fami.Core
 
         private byte[,] tblName = new byte[2, 1024];
         private byte[] tblPalette = new byte[32];
-        private uint[,] tblPattern = new uint[2, 4096];
+        private byte[,] tblPattern = new byte[2, 4096];
 
         private uint fine_x;
         public ulong cycles;
-        private int cycle;
-        private int scanline;
+        public int cycle;
+        public int scanline;
         public byte[] pOAM = new byte[256];
         private uint bg_shifter_pattern_lo;
         private uint bg_next_tile_lsb;
@@ -147,14 +60,16 @@ namespace Fami.Core
             state.vram_addr.Register = vram_addr.Register;
             state.tram_addr.Register = tram_addr.Register;
 
-            //Array.Copy(tblName, state.tblName, tblName.Length);
-            //Array.Copy(tblPalette, state.tblPalette, tblPalette.Length);
-            //Array.Copy(tblPattern, state.tblPattern, tblPattern.Length);
+            Buffer.BlockCopy(tblName, 0, state.tblName, 0, tblName.Length * sizeof(byte));
+            Array.Copy(tblPalette, state.tblPalette, tblPalette.Length);
+            Buffer.BlockCopy(tblPattern, 0, state.tblPattern, 0, tblPattern.Length * sizeof(byte));
 
             state.fine_x = fine_x;
             state.cycles = cycles;
+
             state.cycle = cycle;
             state.scanline = scanline;
+            
             Array.Copy(pOAM, state.pOAM, pOAM.Length);
             state.bg_shifter_pattern_lo = bg_shifter_pattern_lo;
             state.bg_next_tile_lsb = bg_next_tile_lsb;
@@ -183,10 +98,10 @@ namespace Fami.Core
             ppu_mask.Register = state.ppu_mask.Register;
             vram_addr.Register = state.vram_addr.Register;
             tram_addr.Register = state.tram_addr.Register;
-            Buffer.BlockCopy(state.tblName, 0, tblName, 0, tblName.Length * sizeof(byte));
 
+            Buffer.BlockCopy(state.tblName, 0, tblName, 0, tblName.Length * sizeof(byte));
             Array.Copy(state.tblPalette, tblPalette, tblPalette.Length);
-            //Array.Copy(state.tblPattern, tblPattern, tblPattern.Length);
+            Buffer.BlockCopy(state.tblPattern, 0, tblPattern, 0, tblPattern.Length * sizeof(byte));
 
             fine_x = state.fine_x;
             cycles = state.cycles;
@@ -330,7 +245,6 @@ namespace Fami.Core
                         // which we split into coarse and fine x values
                         fine_x = data & 0x07;
                         tram_addr.CoarseX = (byte)(data >> 3);
-                        address_latch = 1;
                     }
                     else
                     {
@@ -338,8 +252,8 @@ namespace Fami.Core
                         // which we split into coarse and fine Y values
                         tram_addr.FineY = (byte)(data & 0x07);
                         tram_addr.CoarseY = (byte)(data >> 3);
-                        address_latch = 0;
                     }
+                    address_latch ^= 1;
                     break;
                 case PPUADDR:
                     if (address_latch == 0)
@@ -348,8 +262,7 @@ namespace Fami.Core
                         // registers. The fisrt write to this register latches the high byte
                         // of the address, the second is the low byte. Note the writes
                         // are stored in the tram register...
-                        tram_addr.Register = ((data & 0x3F) << 8) | (tram_addr.Register & 0x00FF);
-                        address_latch = 1;
+                        tram_addr.Register = ((data & 0x3F) << 8) | (tram_addr.Register & 0x80FF);
                     }
                     else
                     {
@@ -359,9 +272,8 @@ namespace Fami.Core
                         // rendering the scanline position.
                         tram_addr.Register = (tram_addr.Register & 0xFF00) | data;
                         vram_addr.Register = tram_addr.Register;
-
-                        address_latch = 0;
                     }
+                    address_latch ^= 1;
                     break;
                 case PPUDATA:
 
@@ -372,6 +284,14 @@ namespace Fami.Core
                     // one whole nametable row; in horizontal mode it just increments
                     // by 1, moving to the next column
                     vram_addr.Register += ((ppu_control.IncrementMode == 1) ? 32U : 1U);
+                    //if (ppu_control.IncrementMode == 1)
+                    //{
+                    //    vram_addr.CoarseY++;
+                    //}
+                    //else
+                    //{
+                    //    vram_addr.CoarseX++;
+                    //}
                     break;
             }
         }
@@ -387,7 +307,7 @@ namespace Fami.Core
                 case PPUMASK:
                     break;
                 case PPUSTATUS:
-                    data = (byte)(((uint)ppu_status.Register & 0xE0) | (ppu_data_buffer & 0x1F));
+                    data = (((uint)ppu_status.Register & 0xE0) | (ppu_data_buffer & 0x1F));
                     ppu_status.VerticalBlank = 0; // Clear v-blank
                     address_latch = 0;
                     break;
@@ -404,12 +324,21 @@ namespace Fami.Core
                     data = ppu_data_buffer;
                     ppu_data_buffer = PpuRead(vram_addr.Register);
 
-                    if (vram_addr.Register > 0x3F00)
+                    if (vram_addr.Register >= 0x3F00)
                     {
                         data = ppu_data_buffer;
                     }
 
                     vram_addr.Register += ((ppu_control.IncrementMode == 1) ? 32U : 1U);
+                    //if (ppu_control.IncrementMode == 1)
+                    //{
+                    //    vram_addr.CoarseY++;
+                    //}
+                    //else
+                    //{
+                    //    vram_addr.CoarseX++;
+                    //}
+
 
                     break;
             }
@@ -509,7 +438,7 @@ namespace Fami.Core
             {
                 // If the cartridge cant map the address, have
                 // a physical location ready here
-                tblPattern[(address & 0x1000) >> 12, address & 0x0FFF] = data;
+                tblPattern[(address & 0x1000) >> 12, address & 0x0FFF] = (byte)data;
             }
             else if (address >= 0x2000 && address <= 0x3EFF)
             {
@@ -572,7 +501,7 @@ namespace Fami.Core
                         // Leaving nametable so wrap address round
                         vram_addr.CoarseX = 0;
                         // Flip target nametable bit
-                        vram_addr.NametableX = vram_addr.NametableX == 0 ? (byte)1 : (byte)0;
+                        vram_addr.NametableX ^= 1;
                     }
                     else
                     {
@@ -609,7 +538,7 @@ namespace Fami.Core
                             // We do, so reset coarse y offset
                             vram_addr.CoarseY = 0;
                             // And flip the target nametable bit
-                            vram_addr.NametableY = vram_addr.NametableY == 0 ? (byte)1 : (byte)0;
+                            vram_addr.NametableY ^= 1;
                         }
                         else if (vram_addr.CoarseY == 31)
                         {
@@ -678,8 +607,8 @@ namespace Fami.Core
                 // palette is being used for the current 8 pixels and the next 8 pixels, and 
                 // "inflate" them to 8 bit words
 
-                bg_shifter_attrib_lo = (uint)((bg_shifter_attrib_lo & 0xFF00) | (((bg_next_tile_attrib & 0b01) == 0b01) ? 0xFF : 0x00));
-                bg_shifter_attrib_hi = (uint)((bg_shifter_attrib_hi & 0xFF00) | (((bg_next_tile_attrib & 0b10) == 0b10) ? 0xFF : 0x00));
+                bg_shifter_attrib_lo = ((bg_shifter_attrib_lo & 0xFF00) | (uint)(((bg_next_tile_attrib & 0b01) == 0b01) ? 0xFF : 0x00));
+                bg_shifter_attrib_hi = ((bg_shifter_attrib_hi & 0xFF00) | (uint)(((bg_next_tile_attrib & 0b10) == 0b10) ? 0xFF : 0x00));
             };
 
 
@@ -1021,7 +950,7 @@ namespace Fami.Core
                 } // End of sprite evaluation for next scanline
 
                 // Set sprite overflow flag
-                ppu_status.SpriteOverflow = (sprite_count > 8) ? (byte)1 : (byte)0;
+                ppu_status.SpriteOverflow = (sprite_count > SpriteLimit) ? (byte)1 : (byte)0;
 
                 // Now we have an array of the 8 visible sprites for the next scanline. By 
                 // the nature of this search, they are also ranked in priority, because
@@ -1266,6 +1195,12 @@ namespace Fami.Core
                 }
             }
 
+            //// Zelda timing hack?
+            //if (cycle == 120 && scanline == 57)
+            //{
+            //    ppu_status.SpriteZeroHit = 1;
+            //}
+
             // Now we have a background pixel and a foreground pixel. They need
             // to be combined. It is possible for sprites to go behind background
             // tiles that are not "transparent", yet another neat trick of the PPU
@@ -1329,14 +1264,14 @@ namespace Fami.Core
                         // scrolling (since sprites x coord must be >= 0)
                         if (!(ppu_mask.RenderBackgroundLeft == 1 | ppu_mask.RenderSpritesleft == 1))
                         {
-                            if (cycle >= 9 && cycle < 258)
+                            if (cycle >= 9 && cycle < 256)
                             {
                                 ppu_status.SpriteZeroHit = 1;
                             }
                         }
                         else
                         {
-                            if (cycle >= 1 && cycle < 258)
+                            if (cycle >= 1 && cycle < 256)
                             {
                                 ppu_status.SpriteZeroHit = 1;
                             }
@@ -1344,10 +1279,7 @@ namespace Fami.Core
                     }
                 }
             }
-
-
-
-
+            
             if (cycle > 0 && cycle < 256 && scanline > 0 && scanline < 240)
             {
                 buffer[cycle - 1 + scanline * 256] =
@@ -1355,6 +1287,7 @@ namespace Fami.Core
             }
 
             cycle++;
+
             if (cycle >= 341)
             {
                 cycle = 0;
@@ -1365,6 +1298,7 @@ namespace Fami.Core
                     frameComplete = true;
                 }
             }
+
             cycles++;
         }
 
