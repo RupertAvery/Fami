@@ -131,15 +131,19 @@ namespace Fami.Core
         /// <returns></returns>
         public uint Dispatch()
         {
-            if (NMI)
+            for(var i = 0; i < _interrupts.Length; i++)
             {
-                NMI = false;
-                return NonMaskableInterrupt();
-            }
-            if (IRQ & I == 1)
-            {
-                IRQ = false;
-                return InterruptRequest();
+                if (_interrupts[i])
+                {
+                    _interrupts[i] = false;
+                    switch ((InterruptTypeEnum)i)
+                    {
+                        case InterruptTypeEnum.NMI:
+                            return NonMaskableInterrupt();
+                        case InterruptTypeEnum.IRQ:
+                            return InterruptRequest();
+                    }
+                }
             }
 
             var lastPC = PC;
@@ -155,6 +159,11 @@ namespace Fami.Core
             //        //case 0xFAF1:
             //        var x = 1;
             //        break;
+            //}
+            //if (PC < 0x8000)
+            //{
+            //    var x = 1;
+            //    Console.WriteLine($"PC: {PC:X4}");
             //}
 
             var ins = BusRead(PC);

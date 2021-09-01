@@ -3,6 +3,13 @@ using System.Runtime.CompilerServices;
 
 namespace Fami.Core
 {
+    public enum InterruptTypeEnum
+    {
+        NMI,
+        IRQ,
+        BRK
+    }
+
     public partial class Cpu6502State
     {
         public uint[] RAM = new uint[0x800];
@@ -67,9 +74,17 @@ namespace Fami.Core
 
         public Cartridge Cartridge;
 
-        public bool NMI;
         public Ppu Ppu;
-        public bool IRQ;
+        public bool[] _interrupts = new bool[3];
+
+
+        public void TriggerInterrupt(InterruptTypeEnum type)
+        {
+            if (I == 0 || type == InterruptTypeEnum.NMI)
+            {
+                _interrupts[(int)type] = true;
+            }
+        }
 
         public void WriteState(ref CpuState state)
         {

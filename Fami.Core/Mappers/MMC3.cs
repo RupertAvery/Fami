@@ -25,7 +25,7 @@
             }
             if (enable_interrupts && irq_counter == 0)
             {
-                _cartridge.Cpu.IRQ = true;
+                _cartridge.Cpu.TriggerInterrupt(InterruptTypeEnum.IRQ);
             }
         }
 
@@ -50,57 +50,60 @@
 
         public override bool CpuMapWrite(uint address, uint value)
         {
-            // Select bits 4-6 of high byte, and bit 0 of low byte
-            // This will effectively select even and odd addresses 
-            // and filter out ranges to xxx0 and xxx1
-            address &= 0xE001;
+            bool even = (address & 0x1) == 0;
 
-            if (address == 0x8000)
+            if (address >= 0x6000 && address < 0x8000)
             {
-                // Bank Select
-                R = value & 7;
-                P = (value >> 6) & 1;
-                C = (value >> 7) & 1;
+                //if (_prgRAMEnabled)
+                //    _prgRAM[addr - 0x6000] = value;
+                return true;
+            }
+            else if (address >= 0x8000 && address <= 0x9FFF)
+            {
+                if (even)
+                {
+                    // Bank Select
+                    R = value & 7;
+                    P = (value >> 6) & 1;
+                    C = (value >> 7) & 1;
+                }
+                else
+                {
+                    // Bank data
+                    _bankRegister[R] = value;
+
+                }
                 UpdateOffsets();
+                return true;
             }
-            else if (address == 0x8001)
+            else if (address >= 0xA000 && address <= 0xBFFF)
             {
-                // Bank data
-                _bankRegister[R] = value;
-                UpdateOffsets();
+                if (even)
+                    _cartridge.Mirror = (value & 1) == 1 ? MirrorEnum.Horizontal : MirrorEnum.Vertical;
+                else
+                {
+                    enable_sram = (value & 0x80) == 0x80;
+                    enable_write_protect = (value & 0x40) == 0x40;
+                }
+                return true;
             }
-            else if (address == 0xA000)
+            else if (address >= 0xC000 && address <= 0xDFFF)
             {
-                // Mirroring
-                _cartridge.Mirror = (value & 1) == 1 ? MirrorEnum.Horizontal : MirrorEnum.Vertical;
+                if (even)
+                    irq_latch = value;
+                else
+                {
+                    irq_reload = true;
+                    irq_counter = 0;
+                }
+                return true;
             }
-            else if (address == 0xA001)
+            else if (address >= 0xE000 && address <= 0xFFFF)
             {
-                // PRG RAM protect 
-                enable_sram = (value & 0x80) == 0x80;
-                enable_write_protect = (value & 0x40) == 0x40;
+                enable_interrupts = !even;
+                return true;
             }
-            else if (address == 0xC000)
-            {
-                // IRQ latch 
-                irq_latch = value;
-            }
-            else if (address == 0xC001)
-            {
-                // IRQ reload 
-                irq_reload = true;
-                irq_counter = 0;
-            }
-            else if (address == 0xE000)
-            {
-                // IRQ disable 
-                enable_interrupts = false;
-            }
-            else if (address == 0xE001)
-            {
-                // IRQ enable
-                enable_interrupts = true;
-            }
+
             return false;
         }
 

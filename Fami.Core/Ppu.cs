@@ -1088,7 +1088,7 @@ namespace Fami.Core
                 }
             }
 
-            if (cycle == 260 && (ppu_mask.RenderBackground == 1 || ppu_mask.RenderSprites == 1))
+            if ((0 <= scanline && scanline < 240 || scanline == -1) && cycle == 260 && (ppu_mask.RenderBackground == 1 || ppu_mask.RenderSprites == 1))
             {
                 ScanLineHandler?.Invoke();
             }
@@ -1112,7 +1112,7 @@ namespace Fami.Core
                     // perform operations with the PPU knowing it wont
                     // produce visible artefacts
                     if (ppu_control.EnableNmi == 1)
-                        _state.NMI = true;
+                        _state.TriggerInterrupt(InterruptTypeEnum.NMI);
                 }
             }
 
