@@ -69,6 +69,7 @@ namespace Fami.Core
 
         public bool NMI;
         public Ppu Ppu;
+        public bool IRQ;
 
         public void WriteState(ref CpuState state)
         {
@@ -114,12 +115,12 @@ namespace Fami.Core
 
         public void Reset()
         {
-            // https://www.pagetable.com/?p=410
-            S = 0xFD;
-            P = 0x24;
-            PC = BusRead(0xFFFC) + BusRead(0xFFFD) * 0x100;
-            cycles = 7;
             Ppu.Reset();
+            // https://www.pagetable.com/?p=410
+            S = 0xFD; // Actually 0xFF, but 3 Stack Pushes are done with writes supressed, 
+            P = 0x24; // Just to align with nestest.log: I is set, U shouldn't exist, but...
+            PC = BusRead(0xFFFC) + BusRead(0xFFFD) * 0x100; // Fetch the reset vector
+            cycles = 7; // takes 7 cycles to reset
         }
 
         public uint BusRead(uint address)
@@ -186,13 +187,25 @@ namespace Fami.Core
         {
             Push((PC >> 8) & 0xFF); // Push the high byte of the PC
             Push((PC & 0xFF)); // Push the low byte of the PC
-
             B = 0;
             U = 1;
             I = 1;
             Push(P);
             PC = BusRead(0xFFFA) + BusRead(0xFFFB) * 0x100; // Jump to NMI handler
-            return 8;
+            return 7;
+        }
+
+
+        public uint InterruptRequest()
+        {
+            Push((PC >> 8) & 0xFF); // Push the high byte of the PC
+            Push((PC & 0xFF)); // Push the low byte of the PC
+            B = 0;
+            U = 1;
+            I = 1;
+            Push(P);
+            PC = BusRead(0xFFFE) + BusRead(0xFFFF) * 0x100; // Jump to IRQ handler
+            return 7;
         }
 
 

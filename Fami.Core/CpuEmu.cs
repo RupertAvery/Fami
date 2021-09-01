@@ -131,14 +131,16 @@ namespace Fami.Core
         /// <returns></returns>
         public uint Dispatch()
         {
-
             if (NMI)
             {
                 NMI = false;
-                NonMaskableInterrupt();
-                return 0;
+                return NonMaskableInterrupt();
             }
-
+            if (IRQ & I == 1)
+            {
+                IRQ = false;
+                return InterruptRequest();
+            }
 
             var lastPC = PC;
 
@@ -223,60 +225,61 @@ namespace Fami.Core
 
             if (PageBoundsCrossed)
             {
-                switch (ins)
-                {
-                    /*
-                         Affected:
-                        ADC
-                        AND
-                        CMP
-                        EOR
-                        LAX
-                        LDA
-                        LDX
-                        LDY
-                        NOP
-                        ORA
-                        SBC
-                        (indirect),Y
-                        absolute,X
-                        absolute,Y
-                     */
-                    case 0x71:
-                    case 0x7D:
-                    case 0x79:
-                    case 0x31:
-                    case 0x3D:
-                    case 0x39:
-                    case 0xD1:
-                    case 0xDD:
-                    case 0xD9:
-                    case 0x51:
-                    case 0x5D:
-                    case 0x59:
-                    case 0xB3:
-                    case 0xBF:
-                    case 0xB1:
-                    case 0xBD:
-                    case 0xB9:
-                    case 0xBE:
-                    case 0xBC:
-                    case 0x1C:
-                    case 0x3C:
-                    case 0x5C:
-                    case 0x7C:
-                    case 0xDC:
-                    case 0xFC:
-                    case 0x11:
-                    case 0x1D:
-                    case 0x19:
-                    case 0xF1:
-                    case 0xFD:
-                    case 0xF9:
-                    case 0xF0:
-                        pcycles++;
-                        break;
-                }
+                //switch (ins)
+                //{
+                //    /*
+                //        According to documentation, these modes are affected
+                //        ADC
+                //        AND
+                //        CMP
+                //        EOR
+                //        LAX
+                //        LDA
+                //        LDX
+                //        LDY
+                //        NOP
+                //        ORA
+                //        SBC
+                //        (indirect),Y
+                //        absolute,X
+                //        absolute,Y
+                //     */
+                //    case 0x71:
+                //    case 0x7D:
+                //    case 0x79:
+                //    case 0x31:
+                //    case 0x3D:
+                //    case 0x39:
+                //    case 0xD1:
+                //    case 0xDD:
+                //    case 0xD9:
+                //    case 0x51:
+                //    case 0x5D:
+                //    case 0x59:
+                //    case 0xB3:
+                //    case 0xBF:
+                //    case 0xB1:
+                //    case 0xBD:
+                //    case 0xB9:
+                //    case 0xBE:
+                //    case 0xBC:
+                //    case 0x1C:
+                //    case 0x3C:
+                //    case 0x5C:
+                //    case 0x7C:
+                //    case 0xDC:
+                //    case 0xFC:
+                //    case 0x11:
+                //    case 0x1D:
+                //    case 0x19:
+                //    case 0xF1:
+                //    case 0xFD:
+                //    case 0xF9:
+                //    case 0xF0:
+                //        pcycles++;
+                //        break;
+                //}
+                pcycles++;
                 PageBoundsCrossed = false;
             }
 

@@ -207,6 +207,8 @@ namespace Fami.Core
             (0 << 0) + (0 << 8) + (0 << 16),
         };
 
+        public Action ScanLineHandler;
+
         public Ppu(Cpu6502State state)
         {
             _state = state;
@@ -1086,6 +1088,10 @@ namespace Fami.Core
                 }
             }
 
+            if (cycle == 260 && (ppu_mask.RenderBackground == 1 || ppu_mask.RenderSprites == 1))
+            {
+                ScanLineHandler?.Invoke();
+            }
 
 
             if (scanline == 240)
@@ -1195,11 +1201,7 @@ namespace Fami.Core
                 }
             }
 
-            //// Zelda timing hack?
-            //if (cycle == 120 && scanline == 57)
-            //{
-            //    ppu_status.SpriteZeroHit = 1;
-            //}
+
 
             // Now we have a background pixel and a foreground pixel. They need
             // to be combined. It is possible for sprites to go behind background

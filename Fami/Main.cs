@@ -214,26 +214,26 @@ namespace Fami
 
         public void RunFrame()
         {
-            //CyclesRan += CyclesPerFrame;
-            //CyclesLeft += CyclesPerFrame;
+            CyclesRan += CyclesPerFrame;
+            CyclesLeft += CyclesPerFrame;
             //while (CyclesLeft > 0)
             //{
             //    CyclesLeft -= (int)nes.Step();
             //}
             //89342
             //CyclesLeft = 89341 + ((Frames % 2 == 0 )? 1 : 0);
-            //while (CyclesLeft > 0)
-            //{
-            //    CyclesLeft -= (int)nes.Step();
-            //}
-
-            for (var i = -1; i < 261; i++)
+            while (CyclesLeft > 0)
             {
-                for (var j = 0; j < 341; j++)
-                {
-                    nes.Step();
-                }
+                CyclesLeft -= (int)nes.Step();
             }
+
+            //for (var i = -1; i < 261; i++)
+            //{
+            //    for (var j = 0; j < 341; j++)
+            //    {
+            //        nes.Step();
+            //    }
+            //}
 
 
             if (Frames % 4 == 0)
