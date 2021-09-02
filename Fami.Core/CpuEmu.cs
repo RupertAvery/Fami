@@ -6,17 +6,20 @@ namespace Fami.Core
 {
     public partial class Cpu6502State
     {
+        private readonly AudioCallback _audioCallback;
         private bool running;
         private StringBuilder log;
 
-        public Cpu6502State()
+        public Cpu6502State(AudioCallback audioCallback)
         {
+            _audioCallback = audioCallback;
             log = new StringBuilder();
         }
 
         public void Init()
         {
             Ppu = new Ppu(this);
+            Apu = new Apu(this, _audioCallback);
             running = true;
             Cpu6502InstructionSet.InitCpu();
         }
@@ -33,6 +36,8 @@ namespace Fami.Core
         public uint Step()
         {
             Ppu.Clock();
+
+            Apu.Clock();
 
             if (Ppu.cycles % 3 == 0)
             {
@@ -125,6 +130,8 @@ namespace Fami.Core
 
         }
 
+        private bool[] seen = new bool[65536];
+
         /// <summary>
         /// Executes one instruction and return the number of cycles consumed
         /// </summary>
@@ -150,20 +157,19 @@ namespace Fami.Core
 
             //switch (PC)
             //{
-            //    //case 0xC6BC:
-            //    //case 0xE928:
-            //    case 0xF2FC:
-            //        //case 0xFA4D:
-            //        //case 0xC79B:
-            //        //case 0xF55E:
-            //        //case 0xFAF1:
+            //    case 0xA439:
+            //    case 0xE7EB:
             //        var x = 1;
             //        break;
             //}
             //if (PC < 0x8000)
             //{
             //    var x = 1;
+            //if (!seen[PC])
+            //{
             //    Console.WriteLine($"PC: {PC:X4}");
+            //    seen[PC] = true;
+            //}
             //}
 
             var ins = BusRead(PC);

@@ -12,6 +12,11 @@ namespace Fami
 {
     public unsafe class Main : IDisposable
     {
+        const uint AUDIO_SAMPLE_FULL_THRESHOLD = 1024;
+        const int SAMPLES_PER_CALLBACK = 32;
+        static SDL_AudioSpec want, have;
+        static uint AudioDevice;
+
         static IntPtr Window;
         static IntPtr Renderer;
         public const int WIDTH = 256;
@@ -60,7 +65,7 @@ namespace Fami
             PpuState = PpuState.New();
 
 
-            nes = new Cpu6502State();
+            nes = new Cpu6502State(AudioReady);
 
             SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO);
 
@@ -72,6 +77,14 @@ namespace Fami
 
             //SDL_SetWindowMinimumSize(Window, WIDTH, HEIGHT);
             //SDL_SetWindowSize(Window, WIDTH * 4, HEIGHT * 4);
+
+            want.channels = 2;
+            want.freq = 32768;
+            want.samples = SAMPLES_PER_CALLBACK;
+            want.format = AUDIO_S16LSB;
+            // want.callback = NeedMoreAudioCallback;
+            AudioDevice = SDL_OpenAudioDevice(null, 0, ref want, out have, (int)SDL_AUDIO_ALLOW_FORMAT_CHANGE);
+            SDL_PauseAudioDevice(AudioDevice, 0);
 
         }
 
@@ -530,8 +543,33 @@ namespace Fami
 
         public void Dispose()
         {
+            Marshal.FreeHGlobal(AudioTempBufPtr);
             ThreadSync.Dispose();
             Destroy();
         }
+
+        static IntPtr AudioTempBufPtr = Marshal.AllocHGlobal(16384);
+
+        static void AudioReady(short[] data)
+        {
+            // Don't queue audio if too much is in buffer
+            if (Sync || GetAudioSamplesInQueue() < AUDIO_SAMPLE_FULL_THRESHOLD)
+            {
+                int bytes = sizeof(short) * data.Length;
+
+                Marshal.Copy(data, 0, AudioTempBufPtr, data.Length);
+
+                // Console.WriteLine("Outputting samples to SDL");
+
+                SDL_QueueAudio(AudioDevice, AudioTempBufPtr, (uint)bytes);
+            }
+        }
+
+
+        public static uint GetAudioSamplesInQueue()
+        {
+            return SDL_GetQueuedAudioSize(AudioDevice) / sizeof(short);
+        }
     }
+
 }

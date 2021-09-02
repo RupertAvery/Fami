@@ -73,10 +73,10 @@ namespace Fami.Core
         public bool PageBoundsCrossed;
 
         public Cartridge Cartridge;
-
         public Ppu Ppu;
-        public bool[] _interrupts = new bool[3];
+        public Apu Apu;
 
+        public bool[] _interrupts = new bool[3];
 
         public void TriggerInterrupt(InterruptTypeEnum type)
         {
@@ -154,6 +154,10 @@ namespace Fami.Core
             {
                 data = Ppu.Read(address);
             }
+            else if (address == 0x4015)
+            {
+                data = Apu.Read(address);
+            }
             else if (address >= 0x4016 && address <= 0x4017)
             {
                 data = (ControllerState[address & 0x0001] & 0x80) > 0 ? 1U : 0;
@@ -177,6 +181,10 @@ namespace Fami.Core
             else if (address >= 0x2000 && address <= 0x3000)
             {
                 Ppu.Write(address, value);
+            }
+            else if ((address >= 0x4000 && address <= 0x4013) || address == 0x4015 || address == 0x4017)
+            {
+                Apu.Write(address, value);
             }
             else if (address == 0x4014)
             {
