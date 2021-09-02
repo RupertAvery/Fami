@@ -54,9 +54,12 @@
 
             if (address >= 0x6000 && address < 0x8000)
             {
-                //if (_prgRAMEnabled)
-                //    _prgRAM[addr - 0x6000] = value;
-                return true;
+                if (enable_sram)
+                {
+                    _cartridge.RamBankData[address - 0x6000] = (byte)value;
+                    return true;
+                }
+                return false;
             }
             else if (address >= 0x8000 && address <= 0x9FFF)
             {
