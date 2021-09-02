@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Fami.Core;
+using Fami.Core.Audio;
 using SDL2;
 using static SDL2.SDL;
 
@@ -35,6 +36,9 @@ namespace Fami
         public uint ppuStateHead = 0;
         public uint Frames;
         public bool hasState;
+
+
+        private Oscillator osc = new Oscillator();
 
         public void SaveState()
         {
@@ -405,9 +409,6 @@ namespace Fami
                 }
 
 
-
-
-
                 Draw();
             }
 
@@ -415,11 +416,15 @@ namespace Fami
 
         }
 
+        private int bufferPtr = 0;
+        private short[] buffer = new short[256];
+        private double time;
+
         private void UpdateTitle()
         {
             SDL_SetWindowTitle(
                 Window,
-                "Fami - " + Fps + " fps"
+                "Fami - " + Fps + " fps" + GetAudioSamplesInQueue() + " samples queued"
             );
         }
 
@@ -518,6 +523,27 @@ namespace Fami
                     case SDL_Keycode.SDLK_SPACE:
                         Sync = true;
                         break;
+                    case SDL_Keycode.SDLK_0:
+                        //time += (0.3333333333f / 1789773);
+                        time += 1;
+                        for (var i = 0; i < 30000; i++)
+                        {
+                            osc.dutycycle = 0.500;
+                            osc.frequency = 2000;
+
+                            var sample = osc.Sample(i / 100000f);
+                            //var sample = Math.Sin(i * 12000 * Math.PI / 180) * 20;
+
+                            buffer[bufferPtr++] = (short)(sample * 64);
+                            buffer[bufferPtr++] = (short)(sample * 64);
+
+                            if (bufferPtr >= 256)
+                            {
+                                AudioReady(buffer);
+                                bufferPtr = 0;
+                            }
+                        }
+                        break;
 
                 }
             }
@@ -553,7 +579,7 @@ namespace Fami
         static void AudioReady(short[] data)
         {
             // Don't queue audio if too much is in buffer
-            if (Sync || GetAudioSamplesInQueue() < AUDIO_SAMPLE_FULL_THRESHOLD)
+            if (GetAudioSamplesInQueue() < AUDIO_SAMPLE_FULL_THRESHOLD)
             {
                 int bytes = sizeof(short) * data.Length;
 

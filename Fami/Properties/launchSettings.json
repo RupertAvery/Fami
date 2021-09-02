@@ -2,7 +2,7 @@
   "profiles": {
     "Fami": {
       "commandName": "Project",
-      "commandLineArgs": "\"D:\\roms\\NES\\nes-test-roms\\scanline\\scanline.nes\""
+      "commandLineArgs": "\"D:\\roms\\NES\\Adventure Island 3.zip\""
     }
   }
 }

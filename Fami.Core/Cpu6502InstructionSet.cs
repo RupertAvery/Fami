@@ -348,7 +348,8 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint CLI(Cpu6502State cpu)
         {
-            throw new NotImplementedException();
+            cpu.I = 0;
+            return 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -913,7 +914,14 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint ANC(Cpu6502State cpu)
         {
-            throw new NotImplementedException();
+            var arg = cpu.BusRead(cpu.EffectiveAddr);
+            cpu.A = arg & cpu.A;
+
+            cpu.C = (cpu.A >> 8) & 1;
+            TestN(cpu.A, cpu);
+            TestZ(cpu.A, cpu);
+
+            return 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -973,6 +981,7 @@ namespace Fami.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint SHX(Cpu6502State cpu)
         {
+
             throw new NotImplementedException();
         }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using Fami.Core.Audio;
 
 namespace Fami.Core
 {
@@ -19,9 +20,11 @@ namespace Fami.Core
         public void Init()
         {
             Ppu = new Ppu(this);
-            Apu = new Apu(this, _audioCallback);
+            Apu = new Apu();
             running = true;
             Cpu6502InstructionSet.InitCpu();
+            dAudioTimePerSystemSample = 1.0 / (double)44100;
+            dAudioTimePerNESClock = 1.0 / 5369318.0; // PPU Clock Frequency
         }
 
 
@@ -77,9 +80,37 @@ namespace Fami.Core
                 }
             }
 
+            // Synchronising with Audio
+            bool bAudioSampleReady = false;
+            dAudioTime += dAudioTimePerNESClock;
+            if (dAudioTime >= dAudioTimePerSystemSample)
+            {
+                dAudioTime -= dAudioTimePerSystemSample;
+                var dAudioSample = Apu.GetOutputSample();
+
+                buffer[_samples++] = (short)(dAudioSample * 8192);
+                buffer[_samples++] = (short)(dAudioSample * 8192);
+
+                if (_samples >= bufferSize)
+                {
+                    _audioCallback(buffer);
+                    _samples = 0;
+                }
+            }
+
 
             return 1;
         }
+
+
+        private uint bufferSize = 512;
+        private short[] buffer = new short[512];
+        private uint _samples = 0;
+
+        double dAudioTime = 0.0;
+        double dAudioGlobalTime = 0.0;
+        double dAudioTimePerNESClock = 0.0;
+        double dAudioTimePerSystemSample = 0.0f;
 
         private bool Debug { get; set; }
 
@@ -129,9 +160,7 @@ namespace Fami.Core
 
 
         }
-
-        private bool[] seen = new bool[65536];
-
+        
         /// <summary>
         /// Executes one instruction and return the number of cycles consumed
         /// </summary>
