@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using BizHawk.Emulation.Cores.Nintendo.NES;
 using Fami.Core.Audio;
 
 namespace Fami.Core
@@ -75,7 +76,7 @@ namespace Fami.Core
 
         public Cartridge Cartridge;
         public Ppu Ppu;
-        public Apu Apu;
+        public APU Apu;
 
         public bool[] _interrupts = new bool[3];
 
@@ -157,7 +158,7 @@ namespace Fami.Core
             }
             else if (address == 0x4015)
             {
-                data = Apu.Read(address);
+                data = Apu.ReadReg((int)address);
             }
             else if (address >= 0x4016 && address <= 0x4017)
             {
@@ -185,7 +186,7 @@ namespace Fami.Core
             }
             else if ((address >= 0x4000 && address <= 0x4013) || address == 0x4015 || address == 0x4017)
             {
-                Apu.Write(address, value);
+                Apu.WriteReg((int)address, (byte)value);
             }
             else if (address == 0x4014)
             {

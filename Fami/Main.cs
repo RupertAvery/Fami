@@ -13,7 +13,7 @@ namespace Fami
 {
     public unsafe class Main : IDisposable
     {
-        const uint AUDIO_SAMPLE_FULL_THRESHOLD = 1024;
+        const uint AUDIO_SAMPLE_FULL_THRESHOLD = 4096;
         const int SAMPLES_PER_CALLBACK = 32;
         static SDL_AudioSpec want, have;
         static uint AudioDevice;
@@ -83,13 +83,30 @@ namespace Fami
             //SDL_SetWindowSize(Window, WIDTH * 4, HEIGHT * 4);
 
             want.channels = 2;
-            want.freq = 32768;
-            want.samples = SAMPLES_PER_CALLBACK;
+            want.freq = 44100;
+            want.samples = 256;
             want.format = AUDIO_S16LSB;
-            // want.callback = NeedMoreAudioCallback;
+            //want.callback = NeedMoreAudioCallback;
             AudioDevice = SDL_OpenAudioDevice(null, 0, ref want, out have, (int)SDL_AUDIO_ALLOW_FORMAT_CHANGE);
             SDL_PauseAudioDevice(AudioDevice, 0);
 
+        }
+
+        private void NeedMoreAudioCallback(IntPtr userdata, IntPtr stream, int len)
+        {
+            nes.GetSamplesSync(out var samples, out int nsamp);
+            
+            int bytes = sizeof(short) * samples.Length;
+
+            Marshal.Copy(samples, 0, stream, nsamp);
+
+            //Marshal.Copy(samples, 0, AudioTempBufPtr, samples.Length);
+
+            //Marshal.Copy(samples, 0, stream, nsamp);
+            
+            // Console.WriteLine("Outputting samples to SDL");
+
+            //SDL_QueueAudio(AudioDevice, AudioTempBufPtr, (uint)bytes);
         }
 
         static uint[] DisplayBuf = new uint[WIDTH * HEIGHT];
@@ -209,6 +226,10 @@ namespace Fami
                         LoadState();
                         LoadStatePending = false;
                     }
+                    Draw();
+                    nes.GetSamplesSync(out var samples, out int nsamp);
+                    //Console.WriteLine(nsamp);
+                    //GenerateToneSamples();
                 }
             }
             catch (Exception e)
@@ -409,7 +430,7 @@ namespace Fami
                 }
 
 
-                Draw();
+                //Draw();
             }
 
             ThreadSync.Close();
@@ -526,23 +547,7 @@ namespace Fami
                     case SDL_Keycode.SDLK_0:
                         //time += (0.3333333333f / 1789773);
                         time += 1;
-                        for (var i = 0; i < 30000; i++)
-                        {
-                            osc.dutycycle = 0.500;
-                            osc.frequency = 2000;
 
-                            var sample = osc.Sample(i / 100000f);
-                            //var sample = Math.Sin(i * 12000 * Math.PI / 180) * 20;
-
-                            buffer[bufferPtr++] = (short)(sample * 64);
-                            buffer[bufferPtr++] = (short)(sample * 64);
-
-                            if (bufferPtr >= 256)
-                            {
-                                AudioReady(buffer);
-                                bufferPtr = 0;
-                            }
-                        }
                         break;
 
                 }
@@ -550,6 +555,27 @@ namespace Fami
 
             nes.Controller[0] = controller1state;
 
+        }
+
+        public void GenerateToneSamples()
+        {
+            for (var i = 0; i < 256; i++)
+            {
+                osc.dutycycle = 0.500;
+                osc.frequency = 440;
+
+                //var sample = osc.Sample(i / 1000f);
+                var sample = Math.Sin(i * 440 * Math.PI / 180) * 20;
+
+                buffer[bufferPtr++] = (short)(sample * 64);
+                buffer[bufferPtr++] = (short)(sample * 64);
+
+                if (bufferPtr >= 256)
+                {
+                    AudioReady(buffer);
+                    bufferPtr = 0;
+                }
+            }
         }
 
         public static double GetTime()

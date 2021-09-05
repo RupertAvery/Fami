@@ -1,6 +1,10 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Transactions;
+using BizHawk.Emulation.Common;
+using BizHawk.Emulation.Cores.Nintendo.NES;
 using Fami.Core.Audio;
 
 namespace Fami.Core
@@ -10,6 +14,9 @@ namespace Fami.Core
         private readonly AudioCallback _audioCallback;
         private bool running;
         private StringBuilder log;
+        private BlipBuffer blip = new BlipBuffer(4096);
+        private const int blipbuffsize = 4096;
+        private const int cpuclockrate = 1789773;
 
         public Cpu6502State(AudioCallback audioCallback)
         {
@@ -17,14 +24,52 @@ namespace Fami.Core
             log = new StringBuilder();
         }
 
+        public void GetSamplesSync(out short[] samples, out int nsamp)
+        {
+            if (Apu == null || blip == null)
+            {
+                nsamp = 0;
+                samples = new short[nsamp * 2];
+                return;
+            }
+
+            blip.EndFrame(Apu.sampleclock);
+            Apu.sampleclock = 0;
+            deltas = 0;
+
+            nsamp = blip.SamplesAvailable();
+            samples = new short[nsamp * 2];
+
+            blip.ReadSamples(samples, nsamp, false);
+
+            for (int i = nsamp - 1; i >= 0; i--)
+            {
+                samples[i * 2] = samples[i];
+                samples[i * 2 + 1] = samples[i];
+            }
+
+
+            _audioCallback(samples);
+        }
+
+        public void DiscardSamples()
+        {
+            blip.Clear();
+            Apu.sampleclock = 0;
+        }
+
         public void Init()
         {
             Ppu = new Ppu(this);
-            Apu = new Apu();
+            Apu = new APU(this, null, false);
             running = true;
             Cpu6502InstructionSet.InitCpu();
             dAudioTimePerSystemSample = 1.0 / (double)44100;
             dAudioTimePerNESClock = 1.0 / 5369318.0; // PPU Clock Frequency
+
+            blip.SetRates((uint)cpuclockrate, 44100);
+            //blip.SetRates((uint)cpuclockrate, 22050);
+            //blip.SetRates((uint)cpuclockrate, 11025);
         }
 
 
@@ -40,7 +85,7 @@ namespace Fami.Core
         {
             Ppu.Clock();
 
-            Apu.Clock();
+
 
             if (Ppu.cycles % 3 == 0)
             {
@@ -73,38 +118,70 @@ namespace Fami.Core
                 }
                 else
                 {
-                    if (ticksleft-- > 0) return 1;
-                    ticksleft += (int)Dispatch();
-                    cycles += (uint)ticksleft;
-                    instructions++;
-                }
-            }
+                    Apu.RunOneFirst();
 
-            // Synchronising with Audio
-            bool bAudioSampleReady = false;
-            dAudioTime += dAudioTimePerNESClock;
-            if (dAudioTime >= dAudioTimePerSystemSample)
-            {
-                dAudioTime -= dAudioTimePerSystemSample;
-                var dAudioSample = Apu.GetOutputSample();
+                    ClockCpu();
 
-                buffer[_samples++] = (short)(dAudioSample * 8192);
-                buffer[_samples++] = (short)(dAudioSample * 8192);
+                    Apu.RunOneLast();
 
-                if (_samples >= bufferSize)
-                {
-                    _audioCallback(buffer);
-                    _samples = 0;
+                    int s = Apu.EmitSample();
+
+                    if (s != old_s)
+                    {
+                        blip.AddDelta(Apu.sampleclock, s - old_s);
+                        old_s = s;
+                        deltas++;
+                    }
+
+                    Apu.sampleclock++;
+
+
                 }
             }
 
 
+
+            //// Synchronising with Audio
+            //bool bAudioSampleReady = false;
+            //dAudioTime += dAudioTimePerNESClock;
+            //if (dAudioTime >= dAudioTimePerSystemSample)
+            //{
+            //    dAudioTime -= dAudioTimePerSystemSample;
+            //    var dAudioSample = Apu.EmitSample();
+
+            //    buffer[_samples++] = (short)(dAudioSample);
+            //    buffer[_samples++] = (short)(dAudioSample);
+
+            //    if (_samples >= bufferSize)
+            //    {
+            //        _audioCallback(buffer);
+            //        _samples = 0;
+            //    }
+            //}
             return 1;
         }
 
+        private void ClockCpu()
+        {
+            if (ticksleft-- > 0)
+            {
+                return;
+            }
 
-        private uint bufferSize = 512;
-        private short[] buffer = new short[512];
+            ticksleft += (int)Dispatch();
+            cycles += (uint)ticksleft;
+            instructions++;
+        }
+
+        public int deltas;
+        private uint trash;
+        private int old_s;
+
+        private Oscillator osc = new Oscillator() { amplitude = 20, dutycycle = 0.125, frequency = 440 };
+
+
+        private uint bufferSize = 128;
+        private short[] buffer = new short[128];
         private uint _samples = 0;
 
         double dAudioTime = 0.0;
@@ -160,14 +237,14 @@ namespace Fami.Core
 
 
         }
-        
+
         /// <summary>
         /// Executes one instruction and return the number of cycles consumed
         /// </summary>
         /// <returns></returns>
         public uint Dispatch()
         {
-            for(var i = 0; i < _interrupts.Length; i++)
+            for (var i = 0; i < _interrupts.Length; i++)
             {
                 if (_interrupts[i])
                 {

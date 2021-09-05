@@ -1,327 +1,1248 @@
-﻿namespace Fami.Core.Audio
+﻿// TODO - so many integers in the square wave output keep us from exactly unbiasing the waveform. also other waves probably. consider improving the unbiasing.
+// ALSO - consider whether we should even be doing it: the nonlinear-mixing behaviour probably depends on those biases being there. 
+// if we have a better high-pass filter somewhere then we might could cope with the weird biases 
+// (mix higher integer precision with the non-linear mixer and then highpass filter befoure outputting s16s)
+
+// http://wiki.nesdev.com/w/index.php/APU_Mixer_Emulation
+// http://wiki.nesdev.com/w/index.php/APU
+// http://wiki.nesdev.com/w/index.php/APU_Pulse
+// sequencer ref: http://wiki.nesdev.com/w/index.php/APU_Frame_Counter
+
+// TODO - refactor length counter to be separate component
+
+using System;
+using System.Runtime.CompilerServices;
+using Fami.Core;
+
+namespace BizHawk.Emulation.Cores.Nintendo.NES
 {
-    public class Apu
-    {
-        private uint frame_clock_counter;
-        private uint clock_counter;
-        private bool dmc_interrupt;
-        private bool frame_interrupt;
+    public sealed class APU
+	{
+		public int m_vol = 1;
 
-        private double pulse1_sample;
-        private double pulse1_output;
-        private bool pulse1_enable;
-        private bool pulse1_halt;
+		public int dmc_dma_countdown = -1;
+		public int DMC_RDY_check;
+		public bool call_from_write;
 
-        private double pulse2_sample;
-        private double pulse2_output;
-        private bool pulse2_enable;
-        private bool pulse2_halt;
+		public bool recalculate = false;
 
-        private double noise_sample = 0;
-        private double noise_output = 0;
-        private bool noise_enable = false;
-        private bool noise_halt = false;
+		private readonly Cpu6502State nes;
+		public APU(Cpu6502State nes, APU old, bool pal)
+		{
+			this.nes = nes;
+			dmc = new DMCUnit(this, pal);
+			sequencer_lut = pal ? sequencer_lut_pal : sequencer_lut_ntsc;
+			
+			noise = new NoiseUnit(this, pal);
+			triangle = new TriangleUnit(this);
+			pulse[0] = new PulseUnit(this, 1);
+			pulse[1] = new PulseUnit(this, 0);
+			if (old != null)
+			{
+				m_vol = old.m_vol;
+			}
+		}
 
-        private double dGlobalTime;
+		private static readonly int[] DMC_RATE_NTSC = { 428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54 };
+		private static readonly int[] DMC_RATE_PAL = { 398, 354, 316, 298, 276, 236, 210, 198, 176, 148, 132, 118, 98, 78, 66, 50 };
+		private static readonly int[] LENGTH_TABLE = { 10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30 };
 
-        private Sequencer pulse1_seq;
-        private Oscillator pulse1_osc;
-        private Envelope pulse1_env;
-        private LengthCounter pulse1_lc;
-        private Sweeper pulse1_sweep;
+		private static readonly byte[,] PULSE_DUTY = {
+			{0,1,0,0,0,0,0,0}, // (12.5%)
+			{0,1,1,0,0,0,0,0}, // (25%)
+			{0,1,1,1,1,0,0,0}, // (50%)
+			{1,0,0,1,1,1,1,1}, // (25% negated (75%))
+		};
 
-        private Sequencer pulse2_seq;
-        private Oscillator pulse2_osc;
-        private Envelope pulse2_env;
-        private LengthCounter pulse2_lc;
-        private Sweeper pulse2_sweep;
+		private static readonly byte[] TRIANGLE_TABLE =
+		{
+			15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0,
+			0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15
+		};
 
-        private Sequencer triangle_seq;
-        private Oscillator triangle_osc;
-        private Envelope triangle_env;
-        private LengthCounter triangle_lc;
-        private Sweeper triangle_sweep;
+		private static readonly int[] NOISE_TABLE_NTSC =
+		{
+			4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068
+		};
 
-        private Sequencer noise_seq;
-        private Envelope noise_env;
-        private LengthCounter noise_lc;
+		private static readonly int[] NOISE_TABLE_PAL =
+		{
+			4, 7, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708,  944, 1890, 3778
+		};
 
+		public sealed class PulseUnit
+		{
+			public PulseUnit(APU apu, int unit) { this.unit = unit; this.apu = apu; }
+			public int unit;
+			private readonly APU apu;
 
-        uint[] length_table = new uint[]{
-             10, 254, 20,  2, 40,  4, 80,  6,
-            160,   8, 60, 10, 14, 12, 26, 14,
-             12,  16, 24, 18, 48, 20, 96, 22,
-            192,  24, 72, 26, 16, 28, 32, 30
-        };
+			// reg0
+			private int duty_cnt, env_loop, env_constant, env_cnt_value;
+			public bool len_halt;
+			// reg1
+			private int sweep_en, sweep_divider_cnt, sweep_negate, sweep_shiftcount;
 
-        int[] noise_reload_table = new int[]
-        {
-              0,   4,   8,  16,  32,   64,   96,  128, 
-            160, 202, 254, 380, 508, 1016, 2034, 4068
-        };
+			private bool sweep_reload;
+			// reg2/3
+			private int len_cnt;
+			public int timer_raw_reload_value, timer_reload_value;
 
+			// misc..
+			private int lenctr_en;
+			
+			public bool IsLenCntNonZero() { return len_cnt > 0; }
 
-        public Apu()
-        {
-            pulse1_seq = new Sequencer();
-            pulse1_osc = new Oscillator();
-            pulse1_env = new Envelope();
-            pulse1_lc = new LengthCounter();
-            pulse1_sweep = new Sweeper();
+			public void WriteReg(int addr, byte val)
+			{
+				// Console.WriteLine("write pulse {0:X} {1:X}", addr, val);
+				switch (addr)
+				{
+					case 0:
+						env_cnt_value = val & 0xF;
+						env_constant = (val >> 4) & 1;
+						env_loop = (val >> 5) & 1;
+						duty_cnt = (val >> 6) & 3;
+						break;
+					case 1:
+						sweep_shiftcount = val & 7;
+						sweep_negate = (val >> 3) & 1;
+						sweep_divider_cnt = (val >> 4) & 7;
+						sweep_en = (val >> 7) & 1;
+						sweep_reload = true;
+						break;
+					case 2:
+						timer_reload_value = (timer_reload_value & 0x700) | val;
+						timer_raw_reload_value = timer_reload_value * 2 + 2;
+						// if (unit == 1) Console.WriteLine("{0} timer_reload_value: {1}", unit, timer_reload_value);
+						break;
+					case 3:
+						if (apu.len_clock_active)
+						{
+							if (len_cnt == 0)
+							{
+								len_cnt = LENGTH_TABLE[(val >> 3) & 0x1F] + 1;
+							}
+						} else
+						{
+							len_cnt = LENGTH_TABLE[(val >> 3) & 0x1F];
+						}
 
-            pulse2_seq = new Sequencer();
-            pulse2_osc = new Oscillator();
-            pulse2_env = new Envelope();
-            pulse2_lc = new LengthCounter();
-            pulse2_sweep = new Sweeper();
+						timer_reload_value = (timer_reload_value & 0xFF) | ((val & 0x07) << 8);
+						timer_raw_reload_value = timer_reload_value * 2 + 2;
+						duty_step = 0;
+						env_start_flag = 1;
 
-            triangle_seq = new Sequencer();
-            triangle_osc = new Oscillator();
-            triangle_env = new Envelope();
-            triangle_lc = new LengthCounter();
-            triangle_sweep = new Sweeper();
+						// allow the lenctr_en to kill the len_cnt
+						set_lenctr_en(lenctr_en);
 
-            noise_seq = new Sequencer();
-            noise_env = new Envelope();
-            noise_lc = new LengthCounter();
-            noise_seq.sequence = 0xDBDB;
-        }
+						// serves as a useful note-on diagnostic
+						// if(unit==1) Console.WriteLine("{0} timer_reload_value: {1}", unit, timer_reload_value);
+						break;
+				}
+			}
 
+			public void set_lenctr_en(int value)
+			{
+				lenctr_en = value;
+				// if the length counter is not enabled, then we must disable the length system in this way
+				if (lenctr_en == 0) len_cnt = 0;
+			}
 
-        public void Reset()
-        {
-            // silence all channels
-            // clear DMC interrupt flag
-            dmc_interrupt = false;
-        }
+			// state
+			private int swp_divider_counter;
+			private bool swp_silence;
+			private int duty_step;
+			private int timer_counter;
+			public int sample;
+			private bool duty_value;
 
+			private int env_start_flag, env_divider, env_counter;
+			public int env_output;
 
-        public void Clock()
-        {
-            bool quarterFrame = false;
-            bool halfFrame = false;
+			public void clock_length_and_sweep()
+			{
+				// this should be optimized to update only when `timer_reload_value` changes
+				int sweep_shifter = timer_reload_value >> sweep_shiftcount;
+				if (sweep_negate == 1)
+					sweep_shifter = -sweep_shifter - unit;
+				sweep_shifter += timer_reload_value;
 
-            dGlobalTime += (0.3333333333f / 1789773);
+				// this sweep logic is always enabled:
+				swp_silence = (timer_reload_value < 8 || (sweep_shifter > 0x7FF)); // && sweep_negate == 0));
 
-            if (clock_counter % 6 == 0)
-            {
-                frame_clock_counter++;
+				// does enable only block the pitch bend? does the clocking proceed?
+				if (sweep_en == 1)
+				{
+					// clock divider
+					if (swp_divider_counter != 0) swp_divider_counter--;
+					if (swp_divider_counter == 0)
+					{
+						swp_divider_counter = sweep_divider_cnt + 1;
 
-                switch (frame_clock_counter)
-                {
-                    case 3729:
-                        quarterFrame = true;
-                        break;
-                    case 7457:
-                        quarterFrame = true;
-                        halfFrame = true;
-                        break;
-                    case 11186:
-                        quarterFrame = true;
-                        break;
-                    case 14916:
-                        quarterFrame = true;
-                        halfFrame = true;
-                        frame_clock_counter = 0;
-                        break;
-                }
+						// divider was clocked: process sweep pitch bend
+						if (sweep_shiftcount != 0 && !swp_silence)
+						{
+							timer_reload_value = sweep_shifter;
+							timer_raw_reload_value = (timer_reload_value << 1) + 2;
+						}
+						// TODO - does this change the user's reload value or the latched reload value?
+					}
 
-                if (quarterFrame)
-                {
-                    pulse1_env.Clock(pulse1_halt);
-                    pulse2_env.Clock(pulse2_halt);
-                    noise_env.Clock(noise_halt);
-                }
+					// handle divider reload, after clocking happens
+					if (sweep_reload)
+					{
+						swp_divider_counter = sweep_divider_cnt + 1;
+						sweep_reload = false;
+					}
+				}
 
-                if (halfFrame)
-                {
-                    pulse1_lc.clock(pulse1_enable, pulse1_halt);
-                    pulse2_lc.clock(pulse2_enable, pulse2_halt);
-                    noise_lc.clock(noise_enable, noise_halt);
-                    pulse1_sweep.clock(ref pulse1_seq.reload, 0);
-                    pulse2_sweep.clock(ref pulse2_seq.reload, 1);
-                }
+				// env_loop doubles as "halt length counter"
+				if ((env_loop == 0 || len_halt) && len_cnt > 0)
+					len_cnt--;
+			}
 
-                //pulse1_sample = (double)pulse1_seq.Clock(u => ((u & 1) << 7) | ((u & 0xFE) >> 1));
-                pulse1_osc.frequency = 1789773.0 / (16.0 * (pulse1_seq.reload + 1));
-                pulse1_osc.amplitude = (double)(pulse1_env.output - 1) / 16.0;
-                pulse1_sample = pulse1_osc.Sample(dGlobalTime);
+			public void clock_env()
+			{
+				if (env_start_flag == 1)
+				{
+					env_start_flag = 0;
+					env_divider = env_cnt_value;
+					env_counter = 15;
+				}
+				else
+				{
+					if (env_divider != 0)
+					{
+						env_divider--;
+					} else if (env_divider == 0)
+					{
+						env_divider = env_cnt_value;
+						if (env_counter == 0)
+						{
+							if (env_loop == 1)
+							{
+								env_counter = 15;
+							}
+						}
+						else env_counter--;
+					}
+				}
+			}
 
-                if (pulse1_lc.counter > 0 && pulse1_seq.timer >= 8 && !pulse1_sweep.mute && pulse1_env.output > 2)
-                    pulse1_output += (pulse1_sample - pulse1_output) * 0.5f;
-                else
-                    pulse1_output = 0;
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public void Run()
+			{
+				if (env_constant == 1)
+					env_output = env_cnt_value;
+				else env_output = env_counter;
 
-                //pulse1_sample = (double)pulse1_seq.Clock(u => ((u & 1) << 7) | ((u & 0xFE) >> 1));
-                pulse2_osc.frequency = 1789773.0 / (16.0 * (pulse2_seq.reload + 1));
-                pulse2_osc.amplitude = (double)(pulse1_env.output - 1) / 16.0;
-                pulse2_sample = pulse2_osc.Sample(dGlobalTime);
+				if (timer_counter > 0) timer_counter--;
+				if (timer_counter == 0 && timer_raw_reload_value != 0)
+				{
+					if (duty_step==7)
+					{
+						duty_step = 0;
+					} else
+					{
+						duty_step++;
+					}
+					duty_value = PULSE_DUTY[duty_cnt, duty_step] == 1;
+					// reload timer
+					timer_counter = timer_raw_reload_value;
+				}
 
+				int newsample;
 
-                if (pulse2_lc.counter > 0 && pulse2_seq.timer >= 8 && !pulse2_sweep.mute && pulse2_env.output > 2)
-                    pulse2_output += (pulse2_sample - pulse2_output) * 0.5;
-                else
-                    pulse2_output = 0;
+				if (duty_value) // high state of duty cycle
+				{
+					newsample = env_output;
+					if (swp_silence || len_cnt == 0)
+						newsample = 0; // silenced
+				}
+				else
+					newsample = 0; // duty cycle is 0, silenced.
 
-                noise_seq.Clock(noise_enable, s => (((s & 0x0001) ^ ((s & 0x0002) >> 1)) << 14) | ((s & 0x7FFF) >> 1));
+				// newsample -= env_output >> 1; //unbias
+				if (newsample != sample)
+				{
+					apu.recalculate = true;
+					sample = newsample;
+				}
+			}
 
-                if (noise_lc.counter > 0 && noise_seq.timer >= 8)
-                {
-                    noise_output = noise_seq.output * (noise_env.output - 1) / 16.0;
-                }
+			public bool Debug_IsSilenced => swp_silence || len_cnt == 0;
 
-                if (!pulse1_enable) pulse1_output = 0;
-                if (!pulse2_enable) pulse2_output = 0;
-                if (!noise_enable) noise_output = 0;
+			public int Debug_DutyType => duty_cnt;
 
-            }
+			public int Debug_Volume => env_output;
+		}
 
-            pulse1_sweep.track(pulse1_seq.reload);
-            pulse2_sweep.track(pulse2_seq.reload);
+		public sealed class NoiseUnit
+		{
+			private readonly APU apu;
 
-            clock_counter++;
-        }
+			// reg0 (sweep)
+			private int env_cnt_value, env_loop, env_constant;
+			public bool len_halt;
 
-        public uint Read(uint address)
-        {
-            uint data = 0;
-            if (address == 0x4015)
-            {
-                data = (uint)(
-                    ((pulse1_seq.timer > 0 ? 1 : 0) << 0) |
-                    ((pulse2_seq.timer > 0 ? 1 : 0) << 1) |
-                    //((0 > 0 ? 1 : 0) << 2) |
-                    //((noise_length > 0 ? 1 : 0) << 3) |
-                    //((dmc_bytes > 0 ? 1 : 0) << 4) |
-                    ((frame_interrupt ? 1 : 0) << 6) |
-                    ((dmc_interrupt ? 1 : 0) << 7)
-                    );
+			// reg2 (mode and period)
+			private int mode_cnt, period_cnt;
 
-                frame_interrupt = false;
-            }
-            return data;
-        }
+			// reg3 (length counter and envelop trigger)
+			private int len_cnt;
 
-        public void Write(uint address, uint value)
-        {
-            switch (address)
-            {
-                case 0x4000:
-                    switch ((value & 0xC0) >> 6)
-                    {
-                        case 0: pulse1_seq.NewSequence = 0b01000000; pulse1_osc.dutycycle = 0.125; break;
-                        case 1: pulse1_seq.NewSequence = 0b01100000; pulse1_osc.dutycycle = 0.250; break;
-                        case 2: pulse1_seq.NewSequence = 0b01111000; pulse1_osc.dutycycle = 0.500; break;
-                        case 3: pulse1_seq.NewSequence = 0b10011111; pulse1_osc.dutycycle = 0.750; break;
-                    }
-                    pulse1_seq.sequence = pulse1_seq.NewSequence;
-                    pulse1_halt = (value & 0x20) > 0;
-                    pulse1_env.volume = (value & 0x0F);
-                    pulse1_env.disable = (value & 0x10) > 0;
-                    break;
-                
-                case 0x4001:
-                    pulse1_sweep.enabled = (value & 0x80) == 0x80;
-                    pulse1_sweep.period = (value & 0x70) >> 4;
-                    pulse1_sweep.down = (value & 0x08) == 0x08;
-                    pulse1_sweep.shift = (byte)(value & 0x07);
-                    pulse1_sweep.reload = true;
-                    break;
-                
-                case 0x4002:
-                    pulse1_seq.reload = ((pulse1_seq.reload & 0xFF00) | ((int)value & 0xFF));
-                    break;
-                
-                case 0x4003:
-                    pulse1_seq.reload = (((int)(value & 7) << 8) | (pulse1_seq.reload & 0x00FF));
-                    pulse1_seq.timer = pulse1_seq.reload;
-                    pulse1_seq.sequence = pulse1_seq.NewSequence;
-                    pulse1_lc.counter = length_table[(value & 0xF8) >> 3];
-                    pulse1_env.start = true;
-                    break;
+			// set from apu:
+			private int lenctr_en;
 
-                case 0x4004:
-                    switch ((value & 0xC0) >> 6)
-                    {
-                        case 0: pulse2_seq.NewSequence = 0b01000000; pulse2_osc.dutycycle = 0.125; break;
-                        case 1: pulse2_seq.NewSequence = 0b01100000; pulse2_osc.dutycycle = 0.250; break;
-                        case 2: pulse2_seq.NewSequence = 0b01111000; pulse2_osc.dutycycle = 0.500; break;
-                        case 3: pulse2_seq.NewSequence = 0b10011111; pulse2_osc.dutycycle = 0.750; break;
-                    }
-                    pulse2_seq.sequence = pulse2_seq.NewSequence;
-                    pulse2_halt = (value & 0x20) > 0;
-                    pulse2_env.volume = (value & 0x0F);
-                    pulse2_env.disable = (value & 0x10) > 0;
-                    break;
+			// state
+			private int shift_register = 1;
+			private int timer_counter;
+			public int sample;
+			private int env_output, env_start_flag, env_divider, env_counter;
+			private bool noise_bit = true;
 
-                case 0x4005:
-                    pulse2_sweep.enabled = (value & 0x80) == 0x80;
-                    pulse2_sweep.period = (value & 0x70) >> 4;
-                    pulse2_sweep.down = (value & 0x08) == 0x08;
-                    pulse2_sweep.shift = (byte)(value & 0x07);
-                    pulse2_sweep.reload = true;
-                    break;
+			private readonly int[] NOISE_TABLE;
 
-                case 0x4006:
-                    pulse2_seq.reload = ((pulse2_seq.reload & 0xFF00) | ((int)value & 0xFF));
-                    break;
+			public NoiseUnit(APU apu, bool pal)
+			{
+				this.apu = apu;
+				NOISE_TABLE = pal ? NOISE_TABLE_PAL : NOISE_TABLE_NTSC;
+			}
 
-                case 0x4007:
-                    pulse2_seq.reload = (((int)(value & 7) << 8) | (pulse2_seq.reload & 0x00FF));
-                    pulse2_seq.timer = pulse2_seq.reload;
-                    pulse2_seq.sequence = pulse2_seq.NewSequence;
-                    pulse2_lc.counter = length_table[(value & 0xF8) >> 3];
-                    pulse2_env.start = true;
-                    break;
+			public bool Debug_IsSilenced
+			{
+				get
+				{
+					if (len_cnt == 0) return true;
+					return false;
+				}
+			}
 
-                case 0x400A:
-                    triangle_seq.reload = ((triangle_seq.reload & 0xFF00) | ((int)value & 0xFF));
-                    break;
+			public int Debug_Period => period_cnt;
 
-                case 0x400B:
-                    triangle_seq.reload = (((int)(value & 7) << 8) | (pulse2_seq.reload & 0x00FF));
-                    triangle_seq.timer = triangle_seq.reload;
-                    triangle_seq.sequence = triangle_seq.NewSequence;
-                    triangle_lc.counter = length_table[(value & 0xF8) >> 3];
-                    triangle_env.start = true;
-                    break;
+			public int Debug_Volume => env_output;
+			
+			public bool IsLenCntNonZero() => len_cnt > 0;
 
-                case 0x400C:
-                    noise_env.volume = (value & 0x0F);
-                    noise_env.disable = (value & 0x10) == 0x10;
-                    noise_halt = (value & 0x20) == 0x20;
-                    break;
+			public void WriteReg(int addr, byte val)
+			{
+				switch (addr)
+				{
+					case 0:
+						env_cnt_value = val & 0xF;
+						env_constant = (val >> 4) & 1;
+						// we want to delay a halt until after a length clock if they happen on the same cycle
+						if (env_loop==0 && ((val >> 5) & 1)==1)
+						{
+							len_halt = true;
+						}
+						env_loop = (val >> 5) & 1;
+						break;
+					case 1:
+						break;
+					case 2:
+						period_cnt = NOISE_TABLE[val & 0xF];
+						mode_cnt = (val >> 7) & 1;
+						// Console.WriteLine("noise period: {0}, vol: {1}", (val & 0xF), env_cnt_value);
+						break;
+					case 3:
+						if (apu.len_clock_active)
+						{
+							if (len_cnt == 0)
+							{
+								len_cnt = LENGTH_TABLE[(val >> 3) & 0x1F] + 1;
+							}
+						}
+						else
+						{
+							len_cnt = LENGTH_TABLE[(val >> 3) & 0x1F];
+						}
 
-                case 0x400E:
-                    noise_seq.reload = noise_reload_table[value & 0x0F];
-                    break;
-                case 0x400F:
-                    pulse1_env.start = true;
-                    pulse2_env.start = true;
-                    noise_env.start = true;
-                    noise_lc.counter = length_table[(value & 0xF8) >> 3];
-                    break;
-                case 0x4015:
-                    pulse1_enable = (value & 1) == 1;
-                    pulse2_enable = (value & 2) == 2;
-                    noise_enable = (value & 4) == 4;
-                    break;
+						set_lenctr_en(lenctr_en);
+						env_start_flag = 1;
+						break;
+				}
+			}
 
-            }
+			public void set_lenctr_en(int value)
+			{
+				lenctr_en = value;
+				// Console.WriteLine("noise lenctr_en: " + lenctr_en);
+				// if the length counter is not enabled, then we must disable the length system in this way
+				if (lenctr_en == 0) len_cnt = 0;
+			}
 
-            dmc_interrupt = false;
-        }
+			public void clock_env()
+			{
+				if (env_start_flag == 1)
+				{
+					env_start_flag = 0;
+					env_divider = (env_cnt_value + 1);
+					env_counter = 15;
+				}
+				else
+				{
+					if (env_divider != 0) env_divider--;
+					if (env_divider == 0)
+					{
+						env_divider = (env_cnt_value + 1);
+						if (env_counter == 0)
+						{
+							if (env_loop == 1)
+							{
+								env_counter = 15;
+							}
+						}
+						else env_counter--;
+					}
+				}
+			}
 
-        public double GetOutputSample()
-        {
-            return
-            //95.88f / ((8128f / (pulse1_output + pulse2_output)) + 100f);
-            ((1.0 * (pulse1_output)) - 0.8) * 0.1 +
-            ((1.0 * (pulse2_output)) - 0.8) * 0.11
-            ////((2.0 * (noise_output) * 64)) * 0.1
-        ;
-        }
-    }
+			public void clock_length_and_sweep()
+			{
 
+				if (len_cnt > 0 && (env_loop == 0 || len_halt))
+					len_cnt--;
+			}
 
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public void Run()
+			{
+				if (env_constant == 1)
+					env_output = env_cnt_value;
+				else env_output = env_counter;
+
+				if (timer_counter > 0) timer_counter--;
+				if (timer_counter == 0 && period_cnt != 0)
+				{
+					// reload timer
+					timer_counter = period_cnt;
+					int feedback_bit;
+					if (mode_cnt == 1) feedback_bit = (shift_register >> 6) & 1;
+					else feedback_bit = (shift_register >> 1) & 1;
+					int feedback = feedback_bit ^ (shift_register & 1);
+					shift_register >>= 1;
+					shift_register &= ~(1 << 14);
+					shift_register |= (feedback << 14);
+					noise_bit = (shift_register & 1) != 0;
+				}
+
+				int newsample;
+				if (len_cnt == 0) newsample = 0;
+				else if (noise_bit) newsample = env_output; // switched, was 0?
+				else newsample = 0;
+				if (newsample != sample)
+				{
+					apu.recalculate = true;
+					sample = newsample;
+				}
+			}
+		}
+
+		public sealed class TriangleUnit
+		{
+			// reg0
+			private int linear_counter_reload, control_flag;
+			// reg1 (n/a)
+			// reg2/3
+			private int timer_cnt, reload_flag, len_cnt;
+			public bool halt_2;
+			// misc..
+			private int lenctr_en;
+			private int linear_counter, timer, timer_cnt_reload;
+			private int seq = 0;
+			public int sample;
+
+			private readonly APU apu;
+			public TriangleUnit(APU apu) { this.apu = apu; }
+			
+			public bool IsLenCntNonZero() { return len_cnt > 0; }
+
+			public void set_lenctr_en(int value)
+			{
+				lenctr_en = value;
+				// if the length counter is not enabled, then we must disable the length system in this way
+				if (lenctr_en == 0) len_cnt = 0;
+			}
+
+			public void WriteReg(int addr, byte val)
+			{
+				// Console.WriteLine("tri writes addr={0}, val={1:x2}", addr, val);
+
+				switch (addr)
+				{
+					case 0:
+						linear_counter_reload = (val & 0x7F);
+						control_flag = (val >> 7) & 1;
+						break;
+					case 1: break;
+					case 2:
+						timer_cnt = (timer_cnt & ~0xFF) | val;
+						timer_cnt_reload = timer_cnt + 1;
+						break;
+					case 3:
+						timer_cnt = (timer_cnt & 0xFF) | ((val & 0x7) << 8);
+						timer_cnt_reload = timer_cnt + 1;
+						if (apu.len_clock_active)
+						{
+							if (len_cnt == 0)
+							{
+								len_cnt = LENGTH_TABLE[(val >> 3) & 0x1F] + 1;
+							}
+						}
+						else
+						{
+							len_cnt = LENGTH_TABLE[(val >> 3) & 0x1F];
+						}
+						reload_flag = 1;
+
+						// allow the lenctr_en to kill the len_cnt
+						set_lenctr_en(lenctr_en);
+						break;
+				}
+				// Console.WriteLine("tri timer_reload_value: {0}", timer_cnt_reload);
+			}
+
+			public bool Debug_IsSilenced
+			{
+				get
+				{
+					bool en = len_cnt != 0 && linear_counter != 0;
+					return !en;
+				}
+			}
+
+			public int Debug_PeriodValue => timer_cnt;
+
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public void Run()
+			{
+				// when clocked by timer, seq steps forward
+				// except when linear counter or length counter is 0 
+				bool en = len_cnt != 0 && linear_counter != 0;
+
+				bool do_clock = false;
+				if (timer > 0) timer--;
+				if (timer == 0)
+				{
+					do_clock = true;
+					timer = timer_cnt_reload;
+				}
+
+				if (en && do_clock)
+				{
+					int newsample;
+
+					seq = (seq + 1) & 0x1F;
+
+					newsample = TRIANGLE_TABLE[seq];
+
+					// special hack: frequently, games will use the maximum frequency triangle in order to mute it
+					// apparently this results in the DAC for the triangle wave outputting a steady level at about 7.5
+					// so we'll emulate it at the digital level
+					if (timer_cnt_reload == 1) newsample = 8;
+
+					if (newsample != sample)
+					{
+						apu.recalculate = true;
+						sample = newsample;
+					}
+				}
+			}
+
+			public void clock_length_and_sweep()
+			{
+				// env_loopdoubles as "halt length counter"
+				if (len_cnt > 0 && control_flag == 0)
+					len_cnt--;
+			}
+
+			public void clock_linear_counter()
+			{
+				//Console.WriteLine("linear_counter: {0}", linear_counter);
+				if (reload_flag == 1)
+				{
+					linear_counter = linear_counter_reload;
+				}
+				else if (linear_counter != 0)
+				{
+					linear_counter--;
+				}
+
+				if (control_flag == 0) { reload_flag = 0; }
+			}
+		} // class TriangleUnit
+
+		public sealed class DMCUnit
+		{
+			private readonly APU apu;
+			private readonly Cpu6502State nes;
+			private readonly int[] DMC_RATE;
+			public DMCUnit(APU apu, bool pal)
+			{
+				this.apu = apu;
+				nes = apu.nes;
+				out_silence = true;
+				DMC_RATE = pal ? DMC_RATE_PAL : DMC_RATE_NTSC;
+				timer_reload = DMC_RATE[0];
+				timer = 1020; // confirmed in VisualNES although aligning controller read glitches still doesn't work
+				sample_buffer_filled = false;
+				out_deltacounter = 64;
+				out_bits_remaining = 7; //confirmed in VisualNES
+				user_address = 0xC000; // even though this can't be accessed by writing, it is indeed the power up address
+				sample_address = 0xC000;
+				user_length = 1;
+			}
+
+			private bool irq_enabled;
+			private bool loop_flag;
+			public int timer_reload;
+
+			// dmc delay per visual 2a03
+			public int delay;
+
+			// this timer never stops, ever, so it is convenient to use for even/odd timing used elsewhere
+			public int timer;
+			private int user_address;
+			public uint user_length, sample_length;
+			public int sample_address, sample_buffer;
+			private bool sample_buffer_filled;
+
+			public int out_shift, out_bits_remaining, out_deltacounter;
+			private bool out_silence;
+			public bool fill_glitch;
+
+			public int sample => out_deltacounter /* - 64*/;
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public void Run()
+			{
+				if (timer > 0) timer--;
+				if (timer == 0)
+				{
+					timer = timer_reload;
+					Clock();
+				}
+
+				// Any time the sample buffer is in an empty state and bytes remaining is not zero, the following occur: 
+				// also note that the halt for DMC DMA occurs on APU cycles only (hence the timer check)
+				if (!sample_buffer_filled && sample_length > 0 && apu.dmc_dma_countdown == -1 && delay==0)
+				{
+					if (!apu.call_from_write)
+					{
+						// when called due to empty bueffer while DMC running, there is no delay
+						//delay = 1;
+						//nes.cpu.RDY = false;
+						nes.dma_transfer = true;
+						apu.dmc_dma_countdown = 3;
+						apu.DMC_RDY_check = 2;
+					}
+					else
+					{
+						// when called from write, either a 2 or 3 cycle delay in activation.
+						if (timer % 2 == 1)
+						{
+							delay = 2;
+						}
+						else
+						{
+							delay = 3;
+						}					
+					}
+				}
+
+				// VisualNES and test roms verify that DMC DMA is 1 cycle shorter for calls from writes
+				// however, if the third cycle lands on a write, there is a 2 cycle delay even if the instruction only has a single write
+				// therefore, the RDY_check is 2 in both cases.
+				if (delay != 0)
+				{
+					delay--;
+					if (delay == 0)
+					{
+						if (fill_glitch)
+						{
+							//fill_glitch = false;
+							apu.dmc_dma_countdown = 1;
+							apu.DMC_RDY_check = -1;
+						}
+						else if (!apu.call_from_write)
+						{
+							apu.dmc_dma_countdown = 4;
+							apu.DMC_RDY_check = 2;
+						}
+						else
+						{
+							apu.dmc_dma_countdown = 3;
+							apu.DMC_RDY_check = 2;
+							apu.call_from_write = false;
+						}
+					}
+				}
+			}
+
+			private void Clock()
+			{
+				// If the silence flag is clear, bit 0 of the shift register is applied to the counter as follows: 
+				// if bit 0 is clear and the delta-counter is greater than 1, the counter is decremented by 2; 
+				// otherwise, if bit 0 is set and the delta-counter is less than 126, the counter is incremented by 2
+				if (!out_silence)
+				{
+					// apply current sample bit to delta counter
+					if (out_shift.Bit(0))
+					{
+						if (out_deltacounter < 126)
+							out_deltacounter += 2;
+					}
+					else
+					{
+						if (out_deltacounter > 1)
+							out_deltacounter -= 2;
+					}
+					// Console.WriteLine("dmc out sample: {0}", out_deltacounter);
+					apu.recalculate = true;
+				}
+
+				// The right shift register is clocked. 
+				out_shift >>= 1;
+
+				// The bits-remaining counter is decremented. If it becomes zero, a new cycle is started. 
+				if (out_bits_remaining == 0)
+				{
+					// The bits-remaining counter is loaded with 8. 
+					out_bits_remaining = 7;
+					// If the sample buffer is empty then the silence flag is set
+					if (!sample_buffer_filled)
+					{
+						out_silence = true;
+					}
+					else
+					// otherwise, the silence flag is cleared and the sample buffer is emptied into the shift register. 
+					{
+						out_silence = false;
+						out_shift = sample_buffer;
+						sample_buffer_filled = false;
+					}
+				}
+				else out_bits_remaining--;
+			}
+
+			public void set_lenctr_en(bool en)
+			{
+				// should this be delayed by two/three cycles?
+
+				if(!en)
+				{
+					// If the DMC bit is clear, the DMC bytes remaining will be set to 0 
+					// and the DMC will silence when it empties.
+					sample_length = 0;					
+				}
+				else
+				{
+					// only start playback if playback is stopped
+					// Console.Write(sample_length); Console.Write(" "); Console.Write(sample_buffer_filled); Console.Write(" "); Console.Write(apu.dmc_irq); Console.Write("\n");
+					if (sample_length == 0)
+					{
+						sample_address = user_address;
+						sample_length = user_length;
+						
+					}
+					if (!sample_buffer_filled)
+					{
+						// apparently the dmc is different if called from a cpu write, let's try
+						apu.call_from_write = true;
+					}
+				}
+
+				// irq is acknowledged or sure to be clear, in either case
+				apu.dmc_irq = false;
+				apu.SyncIRQ();
+			}
+
+			public bool IsLenCntNonZero()
+			{
+				return sample_length != 0;
+			}
+
+			public void WriteReg(int addr, byte val)
+			{
+				// Console.WriteLine("DMC writes addr={0}, val={1:x2}", addr, val);
+				switch (addr)
+				{
+					case 0:
+						irq_enabled = val.Bit(7);
+						loop_flag = val.Bit(6);
+						timer_reload = DMC_RATE[val & 0xF];
+						if (!irq_enabled) apu.dmc_irq = false;
+						// apu.dmc_irq = false;
+						apu.SyncIRQ();
+						break;
+					case 1:
+						out_deltacounter = val & 0x7F;
+						// apu.nes.LogLine("~~ out_deltacounter set to {0}", out_deltacounter);
+						apu.recalculate = true;
+						break;
+					case 2:
+						user_address = 0xC000 | (val << 6);
+						break;
+					case 3:
+						user_length = ((uint)val << 4) + 1;
+						break;
+				}
+			}
+
+			public void Fetch()
+			{
+				if (sample_length != 0)
+				{
+					sample_buffer = (int)apu.nes.BusRead((uint)sample_address);
+					sample_buffer_filled = true;
+					sample_address = (ushort)(sample_address + 1);
+
+					//sample address wraps to 0xC000
+					if (sample_address == 0) { sample_address = 0xC000;}
+					// Console.WriteLine(sample_length);
+					// Console.WriteLine(user_length);
+					sample_length--;
+					// apu.pending_length_change = 1;
+				}
+				if (sample_length == 0)
+				{
+					if (loop_flag)
+					{
+						sample_address = user_address;
+						sample_length = user_length;
+					}
+					else if (irq_enabled) apu.dmc_irq = true;
+				}
+				// Console.WriteLine("fetching dmc byte: {0:X2}", sample_buffer);
+			}
+		}
+		
+
+		public PulseUnit[] pulse = new PulseUnit[2];
+		public TriangleUnit triangle;
+		public NoiseUnit noise;
+		public readonly DMCUnit dmc;
+
+		private bool irq_pending;
+		private bool dmc_irq;
+		private int pending_reg = -1;
+		private bool doing_tick_quarter = false;
+		private byte pending_val = 0;
+		public int seq_tick;
+		public byte seq_val;
+		public bool len_clock_active;
+
+		private int sequencer_counter, sequencer_step, sequencer_mode, sequencer_irq_inhibit, sequencer_irq_assert;
+		private bool sequencer_irq, sequence_reset_pending, sequencer_irq_clear_pending, sequencer_irq_flag;
+
+		public void RunDMCFetch()
+		{
+			dmc.Fetch();
+		}
+
+		private readonly int[][] sequencer_lut = new int[2][];
+
+		private static readonly int[][] sequencer_lut_ntsc = {
+			new[]{7457,14913,22371,29830},
+			new[]{7457,14913,22371,29830,37282}
+		};
+
+		private static readonly int[][] sequencer_lut_pal = {
+			new[]{8313,16627,24939,33254},
+			new[]{8313,16627,24939,33254,41566}
+		};
+
+		private void sequencer_write_tick(byte val)
+		{
+			if (seq_tick>0)
+			{
+				seq_tick--;
+
+				if (seq_tick==0)
+				{
+					sequencer_mode = (val >> 7) & 1;
+					
+					// Console.WriteLine("apu 4017 = {0:X2}", val);
+					// check if we will be doing the extra frame ticks or not
+					if (sequencer_mode==1)
+					{
+						if (!doing_tick_quarter)
+						{
+							QuarterFrame();
+							HalfFrame();
+						}
+					}
+
+					sequencer_irq_inhibit = (val >> 6) & 1;
+					if (sequencer_irq_inhibit == 1)
+					{
+						sequencer_irq_flag = false;
+					}
+
+					sequencer_counter = 0;
+					sequencer_step = 0;
+				}
+			}
+		}
+
+		private void sequencer_tick()
+		{
+			sequencer_counter++;
+			if (sequencer_mode == 0 && sequencer_counter == sequencer_lut[0][3]-1)
+			{
+				if (sequencer_irq_inhibit==0)
+				{
+					sequencer_irq_assert = 2;
+					sequencer_irq_flag = true;
+				}
+					
+				HalfFrame();
+			}
+			if (sequencer_mode == 0 && sequencer_counter == sequencer_lut[0][3] - 2 && sequencer_irq_inhibit == 0)
+			{
+				//sequencer_irq_assert = 2;
+				sequencer_irq_flag = true;
+			}
+			if (sequencer_mode == 1 && sequencer_counter == sequencer_lut[1][4] - 1)
+			{
+				HalfFrame();
+			}
+			if (sequencer_lut[sequencer_mode][sequencer_step] != sequencer_counter)
+				return;
+			sequencer_check();
+		}
+
+		public void SyncIRQ()
+		{
+			irq_pending = sequencer_irq | dmc_irq;
+		}
+
+		private void sequencer_check()
+		{
+			// Console.WriteLine("sequencer mode {0} step {1}", sequencer_mode, sequencer_step);
+			bool quarter, half, reset;
+			switch (sequencer_mode)
+			{
+				case 0: // 4-step
+					quarter = true;
+					half = sequencer_step == 1;
+					reset = sequencer_step == 3;
+					if (reset && sequencer_irq_inhibit == 0)
+					{
+						// Console.WriteLine("{0} {1,5} set irq_assert", nes.Frame, sequencer_counter);
+						// sequencer_irq_assert = 2;
+						sequencer_irq_flag = true;
+					}
+					break;
+
+				case 1: // 5-step
+					quarter = sequencer_step != 3;
+					half = sequencer_step == 1;
+					reset = sequencer_step == 4;
+					break;
+
+				default:
+					throw new InvalidOperationException();
+			}
+
+			if (reset)
+			{
+				sequencer_counter = 0;
+				sequencer_step = 0;
+			}
+			else sequencer_step++;
+
+			if (quarter) QuarterFrame();
+			if (half) HalfFrame();
+		}
+
+		private void HalfFrame()
+		{
+			doing_tick_quarter = true;
+			pulse[0].clock_length_and_sweep();
+			pulse[1].clock_length_and_sweep();
+			triangle.clock_length_and_sweep();
+			noise.clock_length_and_sweep();
+		}
+
+		private void QuarterFrame()
+		{
+			doing_tick_quarter = true;
+			pulse[0].clock_env();
+			pulse[1].clock_env();
+			triangle.clock_linear_counter();
+			noise.clock_env();
+		}
+
+		public void NESSoftReset()
+		{
+			// need to study what happens to apu and stuff..
+			sequencer_irq = false;
+			sequencer_irq_flag = false;
+			_WriteReg(0x4015, 0);
+
+			// for 4017, its as if the last value written gets rewritten
+			sequencer_mode = (seq_val >> 7) & 1;
+			sequencer_irq_inhibit = (seq_val >> 6) & 1;
+			if (sequencer_irq_inhibit == 1)
+			{
+				sequencer_irq_flag = false;
+			}
+			sequencer_counter = 0;
+			sequencer_step = 0;
+		}
+
+		public void NESHardReset()
+		{
+			// "at power on it is as if $00 was written to $4017 9-12 cycles before the reset vector"
+			// that translates to a starting value for the counter of -3
+			sequencer_counter = -1;
+		}
+
+		public void WriteReg(int addr, byte val)
+		{
+			pending_reg = addr;
+			pending_val = val;
+		}
+
+		private void _WriteReg(int addr, byte val)
+		{
+			//Console.WriteLine("{0:X4} = {1:X2}", addr, val);
+			int index = addr - 0x4000;
+			int reg = index & 3;
+			int channel = index >> 2;
+			switch (channel)
+			{
+				case 0:
+					pulse[0].WriteReg(reg, val);
+					break;
+				case 1:
+					pulse[1].WriteReg(reg, val);
+					break;
+				case 2:
+					triangle.WriteReg(reg, val);
+					break;
+				case 3:
+					noise.WriteReg(reg, val);
+					break;
+				case 4:
+					dmc.WriteReg(reg, val);
+					break;
+				case 5:
+					if (addr == 0x4015)
+					{
+						pulse[0].set_lenctr_en(val & 1);
+						pulse[1].set_lenctr_en((val >> 1) & 1);
+						triangle.set_lenctr_en((val >> 2) & 1);
+						noise.set_lenctr_en((val >> 3) & 1);
+						dmc.set_lenctr_en(val.Bit(4));
+
+					}
+					else if (addr == 0x4017)
+					{
+						if (dmc.timer % 2 == 1)
+						{
+							seq_tick = 3;
+
+						} else
+						{
+							seq_tick = 4;
+						}
+						
+						seq_val = val;
+					}
+					break;
+			}
+		}
+
+		public byte PeekReg(int addr)
+		{
+			switch (addr)
+			{
+				case 0x4015:
+					{
+						//notice a missing bit here. should properly emulate with empty / Data bus
+						//if an interrupt flag was set at the same moment of the read, it will read back as 1 but it will not be cleared. 
+						int dmc_nonzero = dmc.IsLenCntNonZero() ? 1 : 0;
+						int noise_nonzero = noise.IsLenCntNonZero() ? 1 : 0;
+						int tri_nonzero = triangle.IsLenCntNonZero() ? 1 : 0;
+						int pulse1_nonzero = pulse[1].IsLenCntNonZero() ? 1 : 0;
+						int pulse0_nonzero = pulse[0].IsLenCntNonZero() ? 1 : 0;
+						int ret = ((dmc_irq ? 1 : 0) << 7) | ((sequencer_irq_flag ? 1 : 0) << 6) | (dmc_nonzero << 4) | (noise_nonzero << 3) | (tri_nonzero << 2) | (pulse1_nonzero << 1) | (pulse0_nonzero);
+						return (byte)ret;
+					}
+				default:
+					// don't return 0xFF here or SMB will break
+					return 0x00;
+			}
+		}
+
+		public byte ReadReg(int addr)
+		{
+			switch (addr)
+			{
+				case 0x4015:
+					{
+						byte ret = PeekReg(0x4015);
+						// Console.WriteLine("{0} {1,5} $4015 clear irq, was at {2}", nes.Frame, sequencer_counter, sequencer_irq);
+						sequencer_irq_flag = false;
+						SyncIRQ();
+						return ret;
+					}
+				default:
+					// don't return 0xFF here or SMB will break
+					return 0x00;
+			}
+		}
+
+		public Action DebugCallback;
+		public int DebugCallbackDivider;
+		public int DebugCallbackTimer;
+
+		private int pending_length_change;
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public void RunOneFirst()
+		{
+
+			pulse[0].Run();
+			pulse[1].Run();
+			triangle.Run();
+			noise.Run();
+			dmc.Run();
+
+			pulse[0].len_halt = false;
+			pulse[1].len_halt = false;
+			noise.len_halt = false;
+		}
+
+		public void RunOneLast()
+		{
+			if (pending_length_change > 0)
+			{
+				pending_length_change--;
+				if (pending_length_change == 0)
+				{
+					dmc.sample_length--;
+				}
+			}
+
+			// we need to predict if there will be a length clock here, because the sequencer ticks last, but the 
+			// timer reload shouldn't happen if length clock and write happen simultaneously
+			// I'm not sure if we can avoid this by simply processing the sequencer first
+			// but at the moment that would break everything, so this is good enough for now
+			if (sequencer_counter == (sequencer_lut[0][1] - 1) ||
+				(sequencer_counter == sequencer_lut[0][3] - 2 && sequencer_mode == 0) ||
+				(sequencer_counter == sequencer_lut[1][4] - 2 && sequencer_mode == 1))
+			{
+				len_clock_active = true;
+			}
+
+			// handle writes
+			// notes: this set up is a bit convoluded at the moment, mainly because APU behaviour is not entirely understood
+			// in partiuclar, there are several clock pulses affecting the APU, and when new written are latched is not known in detail
+			// the current code simply matches known behaviour			
+			if (pending_reg != -1)
+			{
+				if (pending_reg == 0x4015 || pending_reg == 0x4015 || pending_reg == 0x4003 || pending_reg == 0x4007)
+				{
+					_WriteReg(pending_reg, pending_val);
+					pending_reg = -1;
+				}
+				else if (dmc.timer % 2 == 1)
+				{
+					_WriteReg(pending_reg, pending_val);
+					pending_reg = -1;
+				}
+			}
+
+			len_clock_active = false;
+
+			sequencer_tick();
+			sequencer_write_tick(seq_val);
+			doing_tick_quarter = false;
+
+			if (sequencer_irq_assert > 0)
+			{
+				sequencer_irq_assert--;
+				if (sequencer_irq_assert == 0)
+				{
+					sequencer_irq = true;
+				}
+			}
+
+			SyncIRQ();
+			//nes._irq_apu = irq_pending;
+
+			// since the units run concurrently, the APU frame sequencer is ran last because
+			// it can change the output values of the pulse/triangle channels
+			// we want the changes to affect it on the *next* cycle.
+
+			if (sequencer_irq_flag == false)
+				sequencer_irq = false;
+
+			if (DebugCallbackDivider != 0)
+			{
+				if (DebugCallbackTimer == 0)
+				{
+					DebugCallback?.Invoke();
+					DebugCallbackTimer = DebugCallbackDivider;
+				}
+				else DebugCallbackTimer--;
+
+			}
+		}
+
+		/// <summary>only call in board.ClockCPU()</summary>
+		public void ExternalQueue(int value)
+		{
+			cart_sound = value + old_cart_sound;
+
+			if (cart_sound != old_cart_sound)
+			{
+				recalculate = true;
+				old_cart_sound = cart_sound;
+			}
+		}
+
+		public uint sampleclock = 0;
+
+		private int oldmix = 0;
+		private int cart_sound = 0;
+		private int old_cart_sound = 0;
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public int EmitSample()
+		{
+			if (recalculate)
+			{
+				recalculate = false;
+
+				int s_pulse0 = pulse[0].sample;
+				int s_pulse1 = pulse[1].sample;
+				int s_tri = triangle.sample;
+				int s_noise = noise.sample;
+				int s_dmc = dmc.sample;
+
+				// more properly correct
+				float pulse_out = s_pulse0 == 0 && s_pulse1 == 0
+					? 0
+					: 95.88f / ((8128.0f / (s_pulse0 + s_pulse1)) + 100.0f);
+
+				float tnd_out = s_tri == 0 && s_noise == 0 && s_dmc == 0
+					? 0
+					: 159.79f / (1 / ((s_tri / 8227.0f) + (s_noise / 12241.0f /* * NOISEADJUST*/) + (s_dmc / 22638.0f)) + 100);
+				
+
+				float output = pulse_out + tnd_out;
+
+				// output = output * 2 - 1;
+				// this needs to leave enough headroom for straying DC bias due to the DMC unit getting stuck outputs. smb3 is bad about that. 
+				oldmix = (int)(20000 * output * (1 + m_vol / 5)) + cart_sound;
+			}
+
+			return oldmix;
+		}
+	}
 }

@@ -34,6 +34,7 @@ namespace Fami.Core.Audio
             }
 
             return (2.0 * amplitude / pi) * (a - b);
+            //return amplitude  * (a - b);
         }
-	};
+    };
 }
