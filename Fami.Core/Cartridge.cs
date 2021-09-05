@@ -57,7 +57,7 @@ namespace Fami.Core
             h.RomBankData = r.ReadBytes(h.RomBanks * ROMBANK_SIZE);
             h.VRomBankData = r.ReadBytes(h.VRomBanks * VROMBANK_SIZE);
             h.Mirror = (MirrorEnum) (h.Flags6 & 0x01);
-            h.RamBankData = new byte[8192];
+            h.RamBankData = new byte[16384];
 
             if (h.VRomBanks == 0)
             {

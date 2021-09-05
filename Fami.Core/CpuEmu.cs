@@ -1,8 +1,6 @@
 ﻿using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
-using System.Transactions;
 using BizHawk.Emulation.Common;
 using BizHawk.Emulation.Cores.Nintendo.NES;
 using Fami.Core.Audio;
@@ -11,16 +9,18 @@ namespace Fami.Core
 {
     public partial class Cpu6502State
     {
-        private readonly AudioCallback _audioCallback;
         private bool running;
         private StringBuilder log;
         private BlipBuffer blip = new BlipBuffer(4096);
         private const int blipbuffsize = 4096;
-        private const int cpuclockrate = 1789773;
+        private const int cpuclockrate = 1789773; // NTSC
+        private int old_s;
+        private int _instructionCyclesLeft;
 
-        public Cpu6502State(AudioCallback audioCallback)
+        private bool Debug { get; set; }
+
+        public Cpu6502State()
         {
-            _audioCallback = audioCallback;
             log = new StringBuilder();
         }
 
@@ -35,7 +35,6 @@ namespace Fami.Core
 
             blip.EndFrame(Apu.sampleclock);
             Apu.sampleclock = 0;
-            deltas = 0;
 
             nsamp = blip.SamplesAvailable();
             samples = new short[nsamp * 2];
@@ -47,9 +46,6 @@ namespace Fami.Core
                 samples[i * 2] = samples[i];
                 samples[i * 2 + 1] = samples[i];
             }
-
-
-            _audioCallback(samples);
         }
 
         public void DiscardSamples()
@@ -64,12 +60,8 @@ namespace Fami.Core
             Apu = new APU(this, null, false);
             running = true;
             Cpu6502InstructionSet.InitCpu();
-            dAudioTimePerSystemSample = 1.0 / (double)44100;
-            dAudioTimePerNESClock = 1.0 / 5369318.0; // PPU Clock Frequency
 
             blip.SetRates((uint)cpuclockrate, 44100);
-            //blip.SetRates((uint)cpuclockrate, 22050);
-            //blip.SetRates((uint)cpuclockrate, 11025);
         }
 
 
@@ -79,7 +71,6 @@ namespace Fami.Core
             Ppu.LoadCartridge(cart);
         }
 
-        private int ticksleft;
 
         public uint Step()
         {
@@ -130,7 +121,6 @@ namespace Fami.Core
                     {
                         blip.AddDelta(Apu.sampleclock, s - old_s);
                         old_s = s;
-                        deltas++;
                     }
 
                     Apu.sampleclock++;
@@ -139,57 +129,20 @@ namespace Fami.Core
                 }
             }
 
-
-
-            //// Synchronising with Audio
-            //bool bAudioSampleReady = false;
-            //dAudioTime += dAudioTimePerNESClock;
-            //if (dAudioTime >= dAudioTimePerSystemSample)
-            //{
-            //    dAudioTime -= dAudioTimePerSystemSample;
-            //    var dAudioSample = Apu.EmitSample();
-
-            //    buffer[_samples++] = (short)(dAudioSample);
-            //    buffer[_samples++] = (short)(dAudioSample);
-
-            //    if (_samples >= bufferSize)
-            //    {
-            //        _audioCallback(buffer);
-            //        _samples = 0;
-            //    }
-            //}
             return 1;
         }
 
         private void ClockCpu()
         {
-            if (ticksleft-- > 0)
+            if (_instructionCyclesLeft-- > 0)
             {
                 return;
             }
 
-            ticksleft += (int)Dispatch();
-            cycles += (uint)ticksleft;
-            instructions++;
+            _instructionCyclesLeft += (int)ExecuteInstruction();
+            Cycles += (uint)_instructionCyclesLeft;
+            Instructions++;
         }
-
-        public int deltas;
-        private uint trash;
-        private int old_s;
-
-        private Oscillator osc = new Oscillator() { amplitude = 20, dutycycle = 0.125, frequency = 440 };
-
-
-        private uint bufferSize = 128;
-        private short[] buffer = new short[128];
-        private uint _samples = 0;
-
-        double dAudioTime = 0.0;
-        double dAudioGlobalTime = 0.0;
-        double dAudioTimePerNESClock = 0.0;
-        double dAudioTimePerSystemSample = 0.0f;
-
-        private bool Debug { get; set; }
 
         public void Execute()
         {
@@ -200,23 +153,6 @@ namespace Fami.Core
                 while (running)
                 {
                     Step();
-
-                    //if (cycles % 1000 == 0)
-                    //{
-
-                    //    var sb = new StringBuilder();
-                    //    uint i = 0;
-                    //    var chr = BusRead(0x6000);
-                    //    while (chr != 0)
-                    //    {
-                    //        sb.Append((char)chr);
-                    //        i++;
-                    //        chr = BusRead(0x6000 + i);
-                    //    }
-
-                    //    Console.WriteLine(sb.ToString());
-                    //}
-
                     if (PC == 0x0001)
                     {
                         running = false;
@@ -242,7 +178,7 @@ namespace Fami.Core
         /// Executes one instruction and return the number of cycles consumed
         /// </summary>
         /// <returns></returns>
-        public uint Dispatch()
+        public uint ExecuteInstruction()
         {
             for (var i = 0; i < _interrupts.Length; i++)
             {
@@ -258,25 +194,6 @@ namespace Fami.Core
                     }
                 }
             }
-
-            var lastPC = PC;
-
-            //switch (PC)
-            //{
-            //    case 0xA439:
-            //    case 0xE7EB:
-            //        var x = 1;
-            //        break;
-            //}
-            //if (PC < 0x8000)
-            //{
-            //    var x = 1;
-            //if (!seen[PC])
-            //{
-            //    Console.WriteLine($"PC: {PC:X4}");
-            //    seen[PC] = true;
-            //}
-            //}
 
             var ins = BusRead(PC);
             var bytes = Cpu6502InstructionSet.bytes[ins];
@@ -431,7 +348,7 @@ namespace Fami.Core
                 sb.Append($"   ");
             }
 
-            log.AppendLine($"{PC:X4}  {sb} A:{A:X2} X:{X:X2} Y:{Y:X2} P:{P:X2} SP:{S:X2} PPU:{Ppu.scanline + 1},{Ppu.cycle} CYC:{cycles}");
+            log.AppendLine($"{PC:X4}  {sb} A:{A:X2} X:{X:X2} Y:{Y:X2} P:{P:X2} SP:{S:X2} PPU:{Ppu.scanline + 1},{Ppu.cycle} CYC:{Cycles}");
 
         }
 

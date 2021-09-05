@@ -30,8 +30,8 @@ namespace Fami.Core
         public uint Z;  // bit 1
         public uint C;  // bit 0
 
-        public uint cycles;
-        public uint instructions;
+        public uint Cycles;
+        public uint Instructions;
 
 
         public uint dma_page;
@@ -106,7 +106,7 @@ namespace Fami.Core
             state.Z = Z;  // bit 1
             state.C = C;  // bit 0
 
-            state.cycles = cycles;
+            state.cycles = Cycles;
         }
 
         public void ReadState(CpuState state)
@@ -127,7 +127,7 @@ namespace Fami.Core
             Z = state.Z;  // bit 1
             C = state.C;  // bit 0
 
-            cycles = state.cycles;
+            Cycles = state.cycles;
         }
 
         public void Reset()
@@ -137,7 +137,7 @@ namespace Fami.Core
             S = 0xFD; // Actually 0xFF, but 3 Stack Pushes are done with writes supressed, 
             P = 0x24; // Just to align with nestest.log: I is set, U shouldn't exist, but...
             PC = BusRead(0xFFFC) + BusRead(0xFFFD) * 0x100; // Fetch the reset vector
-            cycles = 7; // takes 7 cycles to reset
+            Cycles = 7; // takes 7 cycles to reset
         }
 
         public uint BusRead(uint address)
