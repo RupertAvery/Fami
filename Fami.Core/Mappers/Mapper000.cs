@@ -1,4 +1,6 @@
-﻿namespace Fami.Core.Mappers
+﻿using System.IO;
+
+namespace Fami.Core.Mappers
 {
     public class Mapper000 : BaseMapper
     {
@@ -38,11 +40,11 @@
             return false;
         }
 
-        public override void WriteState(ref byte[] buffer)
+        public override void WriteState(Stream stream)
         {
 
         }
-        public override void ReadState(byte[] buffer)
+        public override void ReadState(Stream stream)
         {
 
         }

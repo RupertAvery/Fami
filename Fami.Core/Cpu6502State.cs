@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using BizHawk.Emulation.Cores.Nintendo.NES;
 using Fami.Core.Audio;
@@ -14,7 +15,7 @@ namespace Fami.Core
 
     public partial class Cpu6502State
     {
-        public uint[] RAM = new uint[0x800];
+        public byte[] RAM = new byte[0x800];
         public uint A;
         public uint X;
         public uint Y;
@@ -82,52 +83,36 @@ namespace Fami.Core
 
         public void TriggerInterrupt(InterruptTypeEnum type)
         {
-            if (I == 0 || type == InterruptTypeEnum.NMI)
+            if (I != 1 || type == InterruptTypeEnum.NMI)
             {
                 _interrupts[(int)type] = true;
             }
         }
 
-        public void WriteState(ref CpuState state)
+        public void WriteState(Stream stream)
         {
-            Array.Copy(RAM, state.RAM, RAM.Length);
-            state.A = A;
-            state.X = X;
-            state.Y = Y;
-            state.S = S;
-
-            state.PC = PC;
-            state.N = N;  // bit 7
-            state.V = V;  // bit 6
-            state.U = U;  // bit 5
-            state.B = B;  // bit 4
-            state.D = D;  // bit 3
-            state.I = I;  // bit 2
-            state.Z = Z;  // bit 1
-            state.C = C;  // bit 0
-
-            state.cycles = Cycles;
+            var w = new BinaryWriter(stream);
+            w.Write(RAM, 0, RAM.Length);
+            w.Write((byte)A);
+            w.Write((byte)X);
+            w.Write((byte)Y);
+            w.Write((byte)S);
+            w.Write((byte)P);
+            w.Write((ushort)PC);
+            w.Write(Cycles);
         }
 
-        public void ReadState(CpuState state)
+        public void ReadState(Stream stream)
         {
-            Array.Copy(state.RAM, RAM, RAM.Length);
-            A = state.A;
-            X = state.X;
-            Y = state.Y;
-            S = state.S;
-
-            PC = state.PC;
-            N = state.N;  // bit 7
-            V = state.V;  // bit 6
-            U = state.U;  // bit 5
-            B = state.B;  // bit 4
-            D = state.D;  // bit 3
-            I = state.I;  // bit 2
-            Z = state.Z;  // bit 1
-            C = state.C;  // bit 0
-
-            Cycles = state.cycles;
+            var w = new BinaryReader(stream);
+            w.Read(RAM, 0, RAM.Length);
+            A=w.ReadByte();
+            X = w.ReadByte();
+            Y = w.ReadByte();
+            S = w.ReadByte();
+            P = w.ReadByte();
+            PC = w.ReadUInt16();
+            Cycles = w.ReadUInt32();
         }
 
         public void Reset()
@@ -178,7 +163,7 @@ namespace Fami.Core
             }
             else if (address >= 0x0000 && address <= 0x1FFF)
             {
-                RAM[address & 0x07FF] = value;
+                RAM[address & 0x07FF] = (byte)value;
             }
             else if (address >= 0x2000 && address <= 0x3000)
             {

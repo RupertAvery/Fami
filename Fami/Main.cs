@@ -38,13 +38,10 @@ namespace Fami
         private bool _frameAdvance;
 
         private readonly Cpu6502State _nes;
-        public PpuState[] PpuStates = new PpuState[256];
-        public CpuState CpuState;
-        public PpuState PpuState;
-        public byte[] MapperState = new byte[16384];
+        public MemoryStream[] States = new MemoryStream[256];
 
-        public uint PpuStateTail = 0;
-        public uint PpuStateHead = 0;
+        public uint StateHead = 0;
+        public uint StateTail = 0;
         public uint Frames;
         public bool HasState;
 
@@ -55,19 +52,25 @@ namespace Fami
 
         public void SaveState()
         {
-            _nes.WriteState(ref CpuState);
-            _nes.Ppu.WriteState(ref PpuState);
-            _nes.Cartridge.WriteState(ref MapperState);
+            using (var file = new FileStream("state01.sav", FileMode.Create, FileAccess.Write))
+            {
+                _nes.WriteState(file);
+                _nes.Ppu.WriteState(file);
+                _nes.Cartridge.WriteState(file);
+            }
             HasState = true;
         }
 
         public void LoadState()
         {
-            if (HasState)
+            if (File.Exists("state01.sav"))
             {
-                _nes.ReadState(CpuState);
-                _nes.Ppu.ReadState(PpuState);
-                _nes.Cartridge.ReadState(MapperState);
+                using (var file = new FileStream("state01.sav", FileMode.Open, FileAccess.Read))
+                {
+                    _nes.ReadState(file);
+                    _nes.Ppu.ReadState(file);
+                    _nes.Cartridge.ReadState(file);
+                }
             }
         }
 
@@ -75,12 +78,8 @@ namespace Fami
         {
             for (var i = 0; i < 256; i++)
             {
-                PpuStates[i] = PpuState.New();
+                States[i] = new MemoryStream();
             }
-
-            CpuState = CpuState.New();
-            PpuState = PpuState.New();
-
 
             _nes = new Cpu6502State();
 
@@ -152,11 +151,11 @@ namespace Fami
 
             if (Frames % 4 == 0)
             {
-                _nes.Ppu.WriteState(ref PpuStates[PpuStateHead]);
-                PpuStateHead++;
-                if (PpuStateHead > 255)
+                //_nes.Ppu.WriteState(States[StateHead]);
+                StateHead++;
+                if (StateHead > 255)
                 {
-                    PpuStateHead = 0;
+                    StateHead = 0;
                 }
             }
 

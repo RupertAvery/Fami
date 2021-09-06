@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using Fami.Core.Utility;
 
 namespace Fami.Core
 {
@@ -48,83 +50,109 @@ namespace Fami.Core
         private bool bSpriteZeroBeingRendered;
         private bool bSpriteZeroHitPossible;
         private SpriteScanline[] spriteScanline = new SpriteScanline[64];
-        private uint[] sprite_shifter_pattern_lo = new uint[64];
-        private uint[] sprite_shifter_pattern_hi = new uint[64];
+        private byte[] sprite_shifter_pattern_lo = new byte[64];
+        private byte[] sprite_shifter_pattern_hi = new byte[64];
 
-        public void WriteState(ref PpuState state)
+        public void WriteState(Stream stream)
         {
+            var writer = new BinaryWriter(stream);
             //Array.Copy(buffer, state.buffer, buffer.Length);
-            state.ppu_status.Register = ppu_status.Register;
-            state.ppu_control.Register = ppu_control.Register;
-            state.ppu_mask.Register = ppu_mask.Register;
-            state.vram_addr.Register = vram_addr.Register;
-            state.tram_addr.Register = tram_addr.Register;
+            writer.Write(ppu_status.Register);
+            writer.Write(ppu_control.Register);
+            writer.Write(ppu_mask.Register);
+            writer.Write(vram_addr.Register);
+            writer.Write(tram_addr.Register);
 
-            Buffer.BlockCopy(tblName, 0, state.tblName, 0, tblName.Length * sizeof(byte));
-            Array.Copy(tblPalette, state.tblPalette, tblPalette.Length);
-            Buffer.BlockCopy(tblPattern, 0, state.tblPattern, 0, tblPattern.Length * sizeof(byte));
+            writer.Write2DArray(tblName, 2, 1024);
+            writer.Write(tblPalette, 0, tblPalette.Length);
+            writer.Write2DArray(tblPattern, 2, 4096);
 
-            state.fine_x = fine_x;
-            state.cycles = cycles;
+            writer.Write(fine_x);
+            writer.Write(cycle);
+            writer.Write(scanline);
 
-            state.cycle = cycle;
-            state.scanline = scanline;
-            
-            Array.Copy(pOAM, state.pOAM, pOAM.Length);
-            state.bg_shifter_pattern_lo = bg_shifter_pattern_lo;
-            state.bg_next_tile_lsb = bg_next_tile_lsb;
-            state.bg_shifter_pattern_hi = bg_shifter_pattern_hi;
-            state.bg_next_tile_msb = bg_next_tile_msb;
-            state.bg_shifter_attrib_lo = bg_shifter_attrib_lo;
-            state.bg_shifter_attrib_hi = bg_shifter_attrib_hi;
-            state.bg_next_tile_attrib = bg_next_tile_attrib;
-            state.bg_next_tile_id = bg_next_tile_id;
-            state.address_latch = address_latch;
-            state.ppu_data_buffer = ppu_data_buffer;
-            state.oam_addr = oam_addr;
-            state.sprite_count = sprite_count;
-            state.bSpriteZeroBeingRendered = bSpriteZeroBeingRendered;
-            state.bSpriteZeroHitPossible = bSpriteZeroHitPossible;
-            //private SpriteScanline[] spriteScanline = new SpriteScanline[64];
-            Array.Copy(sprite_shifter_pattern_lo, state.sprite_shifter_pattern_lo, sprite_shifter_pattern_lo.Length);
-            Array.Copy(sprite_shifter_pattern_hi, state.sprite_shifter_pattern_hi, sprite_shifter_pattern_hi.Length);
+            writer.Write(pOAM, 0, pOAM.Length);
+
+            writer.Write((byte)bg_shifter_pattern_lo);
+            writer.Write((byte)bg_next_tile_lsb);
+            writer.Write((byte)bg_shifter_pattern_hi);
+            writer.Write((byte)bg_next_tile_msb);
+            writer.Write((byte)bg_shifter_attrib_lo);
+            writer.Write((byte)bg_shifter_attrib_hi);
+            writer.Write((byte)bg_next_tile_attrib);
+            writer.Write((byte)bg_next_tile_id);
+            writer.Write((byte)address_latch);
+            writer.Write((byte)ppu_data_buffer);
+            writer.Write((byte)oam_addr);
+            writer.Write((byte)sprite_count);
+
+            for (var i = 0; i < spriteScanline.Length; i++)
+            {
+                writer.Write((byte)spriteScanline[i].Y);
+                writer.Write((byte)spriteScanline[i].Id);
+                writer.Write((byte)spriteScanline[i].Attribute);
+                writer.Write((byte)spriteScanline[i].X);
+            }
+
+            writer.Write(bSpriteZeroBeingRendered);
+            writer.Write(bSpriteZeroHitPossible);
+
+            writer.Write(sprite_shifter_pattern_lo, 0, sprite_shifter_pattern_lo.Length);
+            writer.Write(sprite_shifter_pattern_hi, 0, sprite_shifter_pattern_hi.Length);
+
+            writer.Write(cycles);
         }
 
-        public void ReadState(PpuState state)
+        public void ReadState(Stream stream)
         {
+            byte[] buffer;
+
+            var reader = new BinaryReader(stream);
             //Array.Copy(buffer, state.buffer, buffer.Length);
-            ppu_status.Register = state.ppu_status.Register;
-            ppu_control.Register = state.ppu_control.Register;
-            ppu_mask.Register = state.ppu_mask.Register;
-            vram_addr.Register = state.vram_addr.Register;
-            tram_addr.Register = state.tram_addr.Register;
+            ppu_status.Register = reader.ReadByte();
+            ppu_control.Register = reader.ReadByte();
+            ppu_mask.Register = reader.ReadByte();
+            vram_addr.Register = reader.ReadUInt32();
+            tram_addr.Register = reader.ReadUInt32();
 
-            Buffer.BlockCopy(state.tblName, 0, tblName, 0, tblName.Length * sizeof(byte));
-            Array.Copy(state.tblPalette, tblPalette, tblPalette.Length);
-            Buffer.BlockCopy(state.tblPattern, 0, tblPattern, 0, tblPattern.Length * sizeof(byte));
+            reader.Read2DArray(tblName, 2, 1024);
+            reader.Read(tblPalette, 0, tblPalette.Length);
+            reader.Read2DArray(tblPattern, 2, 4096);
 
-            fine_x = state.fine_x;
-            cycles = state.cycles;
-            cycle = state.cycle;
-            scanline = state.scanline;
-            Array.Copy(state.pOAM, pOAM, pOAM.Length);
-            bg_shifter_pattern_lo = state.bg_shifter_pattern_lo;
-            bg_next_tile_lsb = state.bg_next_tile_lsb;
-            bg_shifter_pattern_hi = state.bg_shifter_pattern_hi;
-            bg_next_tile_msb = state.bg_next_tile_msb;
-            bg_shifter_attrib_lo = state.bg_shifter_attrib_lo;
-            bg_shifter_attrib_hi = state.bg_shifter_attrib_hi;
-            bg_next_tile_attrib = state.bg_next_tile_attrib;
-            bg_next_tile_id = state.bg_next_tile_id;
-            address_latch = state.address_latch;
-            ppu_data_buffer = state.ppu_data_buffer;
-            oam_addr = state.oam_addr;
-            sprite_count = state.sprite_count;
-            bSpriteZeroBeingRendered = state.bSpriteZeroBeingRendered;
-            bSpriteZeroHitPossible = state.bSpriteZeroHitPossible;
-            //private SpriteScanline[] spriteScanline = new SpriteScanline[64];
-            Array.Copy(state.sprite_shifter_pattern_lo, sprite_shifter_pattern_lo, sprite_shifter_pattern_lo.Length);
-            Array.Copy(state.sprite_shifter_pattern_hi, sprite_shifter_pattern_hi, sprite_shifter_pattern_hi.Length);
+            fine_x = reader.ReadUInt32();
+            cycle = reader.ReadInt32();
+            scanline = reader.ReadInt32();
+
+            reader.Read(pOAM, 0, pOAM.Length);
+
+            bg_shifter_pattern_lo = reader.ReadByte();
+            bg_next_tile_lsb = reader.ReadByte();
+            bg_shifter_pattern_hi = reader.ReadByte();
+            bg_next_tile_msb = reader.ReadByte();
+            bg_shifter_attrib_lo = reader.ReadByte();
+            bg_shifter_attrib_hi = reader.ReadByte();
+            bg_next_tile_attrib = reader.ReadByte();
+            bg_next_tile_id = reader.ReadByte();
+            address_latch = reader.ReadByte();
+            ppu_data_buffer = reader.ReadByte();
+            oam_addr = reader.ReadByte();
+            sprite_count = reader.ReadByte();
+
+            for (var i = 0; i < spriteScanline.Length; i++)
+            {
+                spriteScanline[i].Y = reader.ReadByte();
+                spriteScanline[i].Id = reader.ReadByte();
+                spriteScanline[i].Attribute = reader.ReadByte();
+                spriteScanline[i].X = reader.ReadByte();
+            }
+
+            bSpriteZeroBeingRendered = reader.ReadBoolean();
+            bSpriteZeroHitPossible = reader.ReadBoolean();
+
+            reader.Read(sprite_shifter_pattern_lo, 0, sprite_shifter_pattern_lo.Length);
+            reader.Read(sprite_shifter_pattern_hi, 0, sprite_shifter_pattern_hi.Length);
+
+            cycles = reader.ReadUInt64();
         }
 
 
@@ -230,7 +258,7 @@ namespace Fami.Core
                     tram_addr.NametableY = ppu_control.NametableY;
                     break;
                 case PPUMASK:
-                    ppu_mask.Register = data;
+                    ppu_mask.Register = (byte)data;
                     break;
                 case PPUSTATUS:
                     break;
@@ -885,13 +913,14 @@ namespace Fami.Core
                 // sprites to be rendered. It is not the OAM.
                 //std::memset(spriteScanline, 0xFF, 8 * sizeof(sObjectAttributeEntry));
 
-                foreach (var sprite in spriteScanline)
+                for (var i = 0; i < spriteScanline.Length; i++)
                 {
-                    sprite.Y = 0xff;
-                    sprite.Id = 0xff;
-                    sprite.Attribute = 0xff;
-                    sprite.X = 0xff;
+                    spriteScanline[i].Y = 0xff;
+                    spriteScanline[i].Id = 0xff;
+                    spriteScanline[i].Attribute = 0xff;
+                    spriteScanline[i].X = 0xff;
                 }
+
                 // The NES supports a maximum number of sprites per scanline. Nominally
                 // this is 8 or fewer sprites. This is why in some games you see sprites
                 // flicker or disappear when the scene gets busy.
@@ -1083,8 +1112,8 @@ namespace Fami.Core
 
                     // Finally! We can load the pattern into our sprite shift registers
                     // ready for rendering on the next scanline
-                    sprite_shifter_pattern_lo[i] = sprite_pattern_bits_lo;
-                    sprite_shifter_pattern_hi[i] = sprite_pattern_bits_hi;
+                    sprite_shifter_pattern_lo[i] = (byte)sprite_pattern_bits_lo;
+                    sprite_shifter_pattern_hi[i] = (byte)sprite_pattern_bits_hi;
                 }
             }
 
@@ -1281,7 +1310,7 @@ namespace Fami.Core
                     }
                 }
             }
-            
+
             if (cycle > 0 && cycle < 256 && scanline > 0 && scanline < 240)
             {
                 buffer[cycle - 1 + scanline * 256] =

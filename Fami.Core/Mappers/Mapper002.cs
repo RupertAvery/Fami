@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 
 namespace Fami.Core.Mappers
 {
@@ -21,19 +22,18 @@ namespace Fami.Core.Mappers
             };
         }
 
-        public override void WriteState(ref byte[] buffer)
+        public override void WriteState(Stream stream)
         {
-            buffer[0] = (byte)(_bankOffset & 0xff);
-            buffer[1] = (byte)((_bankOffset >> 8) & 0xff);
-            buffer[2] = (byte)((_bankOffset >> 16) & 0xff);
-            buffer[3] = (byte)((_bankOffset >> 24) & 0xff);
-            Array.Copy(_cartridge.RamBankData, 0, buffer, 4, 8192);
+            var w = new BinaryWriter(stream);
+            w.Write(_bankOffset);
+            w.Write(_cartridge.RamBankData, 0, _cartridge.RamBankData.Length);
         }
 
-        public override void ReadState(byte[] buffer)
+        public override void ReadState(Stream stream)
         {
-            _bankOffset = (uint)(buffer[3] << 24) | (uint)(buffer[2] << 16) | (uint)(buffer[1] << 8) | buffer[0];
-            Array.Copy(buffer, 4, _cartridge.RamBankData, 0, 8192);
+            var w = new BinaryReader(stream);
+            _bankOffset = w.ReadUInt32();
+            w.Read(_cartridge.RamBankData, 0, _cartridge.RamBankData.Length);
         }
 
         public override bool CpuMapWrite(uint address, uint value)

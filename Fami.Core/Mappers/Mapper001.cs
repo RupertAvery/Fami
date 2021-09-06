@@ -1,4 +1,7 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Data;
+using System.IO;
+using System.Runtime.CompilerServices;
+using Fami.Core.Utility;
 
 namespace Fami.Core.Mappers
 {
@@ -8,7 +11,6 @@ namespace Fami.Core.Mappers
         public enum CHRBankingMode { Single, Double }
         public enum PRGBankingMode { Switch32Kb, Switch16KbFixFirst, Switch16KbFixLast }
 
-        private uint _bankOffset;
 
         private uint _offset;
         private uint shift_reg = 0;
@@ -18,10 +20,9 @@ namespace Fami.Core.Mappers
         private int _serialPos;
         private uint _control;
 
-        private readonly uint[] _chrBankOffsets = new uint[2];
-        private readonly uint[] _chrBanks = new uint[2];
-
-        private readonly uint[] _prgBankOffsets = new uint[2];
+        private uint[] _chrBankOffsets = new uint[2];
+        private uint[] _chrBanks = new uint[2];
+        private uint[] _prgBankOffsets = new uint[2];
         private uint _prgBank;
 
         private bool _prgRAMEnabled;
@@ -187,13 +188,50 @@ namespace Fami.Core.Mappers
             }
         }
 
-        public override void WriteState(ref byte[] buffer)
+        public override void WriteState(Stream stream)
         {
+            var w = new BinaryWriter(stream);
+            w.Write(_offset);
+            w.Write(shift_reg);
+            w.Write(shift);
+            w.Write(_lastWritePC);
+            w.Write(_serialData);
+            w.Write(_serialPos);
+            w.Write(_control);
 
+            w.Write(_chrBankOffsets, 0, _chrBankOffsets.Length);
+            w.Write(_chrBanks, 0, _chrBanks.Length);
+            w.Write(_prgBankOffsets, 0, _chrBankOffsets.Length);
+            w.Write(_prgBank);
+
+            w.Write(_prgRAMEnabled);
+
+            w.Write((byte)_chrBankingMode);
+            w.Write((byte)_prgBankingMode);
+
+            w.Write(_cartridge.RamBankData, 0, _cartridge.RamBankData.Length);
         }
-        public override void ReadState(byte[] buffer)
+        public override void ReadState(Stream stream)
         {
+            var w = new BinaryReader(stream);
+            _offset = w.ReadUInt32();
+            shift_reg = w.ReadUInt32();
+            shift = w.ReadUInt32();
+            _lastWritePC = w.ReadUInt32();
+            _serialData = w.ReadUInt32();
+            _serialPos = w.ReadInt32();
+            _control = w.ReadUInt32();
 
+            _chrBankOffsets = w.ReadUInt32Array(_chrBankOffsets.Length);
+            _chrBanks = w.ReadUInt32Array(_chrBanks.Length);
+            _prgBankOffsets = w.ReadUInt32Array(_chrBankOffsets.Length);
+            _prgBank = w.ReadUInt32();
+
+            _prgRAMEnabled = w.ReadBoolean();
+
+            _chrBankingMode = (CHRBankingMode)w.ReadByte();
+            _prgBankingMode = (PRGBankingMode)w.ReadByte();
+            w.Read(_cartridge.RamBankData, 0, _cartridge.RamBankData.Length);
         }
     }
 }

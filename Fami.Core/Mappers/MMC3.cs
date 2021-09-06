@@ -1,9 +1,22 @@
-﻿namespace Fami.Core.Mappers
+﻿using System.IO;
+
+namespace Fami.Core.Mappers
 {
     public class MMC3 : BaseMapper
     {
+        private byte _bankRegisterSelect;
+        private byte _chrSelect;
+        private byte _prgSelect;
+
+        private byte irq_counter;
+        private bool irq_reload;
+        private byte irq_latch;
+        private bool enable_interrupts;
+        private bool enable_sram;
+        private bool enable_write_protect;
+
         private uint[] _bankRegister = new uint[8];
-        protected readonly uint[] _chrBankOffsets = new uint[8];
+        protected uint[] _chrBankOffsets = new uint[8];
         protected uint[] _prgBankOffsets;
 
         public MMC3(Cartridge cartridge) : base(cartridge)
@@ -43,10 +56,6 @@
             return (0, false);
         }
 
-        private uint R;
-        private uint C;
-        private uint P;
-        private uint M;
 
         public override bool CpuMapWrite(uint address, uint value)
         {
@@ -66,14 +75,14 @@
                 if (even)
                 {
                     // Bank Select
-                    R = value & 7;
-                    P = (value >> 6) & 1;
-                    C = (value >> 7) & 1;
+                    _bankRegisterSelect = (byte)(value & 7);
+                    _prgSelect = (byte)((value >> 6) & 1);
+                    _chrSelect = (byte)((value >> 7) & 1);
                 }
                 else
                 {
                     // Bank data
-                    _bankRegister[R] = value;
+                    _bankRegister[_bankRegisterSelect] = value;
 
                 }
                 UpdateOffsets();
@@ -93,7 +102,7 @@
             else if (address >= 0xC000 && address <= 0xDFFF)
             {
                 if (even)
-                    irq_latch = value;
+                    irq_latch = (byte)value;
                 else
                 {
                     irq_reload = true;
@@ -110,12 +119,6 @@
             return false;
         }
 
-        private uint irq_counter;
-        private bool irq_reload;
-        private uint irq_latch;
-        private bool enable_interrupts;
-        private bool enable_sram;
-        private bool enable_write_protect;
 
         public override (uint value, bool handled) PpuMapRead(uint address)
         {
@@ -135,19 +138,58 @@
             return false;
         }
 
-        public override void WriteState(ref byte[] buffer)
+        public override void WriteState(Stream stream)
         {
+            var writer = new BinaryWriter(stream);
 
+            writer.Write(_bankRegisterSelect);
+            writer.Write(_chrSelect);
+            writer.Write(_prgSelect);
+            writer.Write(irq_counter);
+            writer.Write(irq_latch);
+            writer.Write(irq_reload);
+            writer.Write(enable_interrupts);
+            writer.Write(enable_sram);
+            writer.Write(enable_write_protect);
+
+            writer.Write((byte)_cartridge.Mirror);
+
+            //writer.Write(_bankRegister, 0, _bankRegister.Length);
+            //writer.Write(_chrBankOffsets, 0, _chrBankOffsets.Length);
+            //writer.Write(_prgBankOffsets, 0, _prgBankOffsets.Length);
+            writer.Write(_cartridge.VRomBankData, 0, _cartridge.VRomBankData.Length);
+            writer.Write(_cartridge.RamBankData, 0, _cartridge.RamBankData.Length);
         }
-        public override void ReadState(byte[] buffer)
-        {
 
+        public override void ReadState(Stream stream)
+        {
+            var reader = new BinaryReader(stream);
+
+            _bankRegisterSelect = reader.ReadByte();
+            _chrSelect = reader.ReadByte();
+            _prgSelect = reader.ReadByte();
+            irq_counter = reader.ReadByte();
+            irq_latch = reader.ReadByte();
+            irq_reload = reader.ReadBoolean();
+            enable_interrupts = reader.ReadBoolean();
+            enable_sram = reader.ReadBoolean();
+            enable_write_protect = reader.ReadBoolean();
+
+            _cartridge.Mirror = (MirrorEnum)reader.ReadByte();
+
+            //_bankRegister = reader.ReadUInt32Array(_bankRegister.Length);
+            //_chrBankOffsets = reader.ReadUInt32Array(_chrBankOffsets.Length);
+            //_prgBankOffsets = reader.ReadUInt32Array(_prgBankOffsets.Length);
+            reader.Read(_cartridge.VRomBankData, 0, _cartridge.VRomBankData.Length);
+            reader.Read(_cartridge.RamBankData, 0, _cartridge.RamBankData.Length);
+
+            UpdateOffsets();
         }
 
 
         protected void UpdateOffsets()
         {
-            switch (P)
+            switch (_prgSelect)
             {
                 case 0:
                     _prgBankOffsets[0] = _bankRegister[6] * 0x2000;
@@ -163,7 +205,7 @@
                     break;
             }
 
-            switch (C)
+            switch (_chrSelect)
             {
                 case 0:
                     _chrBankOffsets[0] = _bankRegister[0] & 0xFE;

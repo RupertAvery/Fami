@@ -57,7 +57,7 @@ namespace Fami.Core
             h.RomBankData = r.ReadBytes(h.RomBanks * ROMBANK_SIZE);
             h.VRomBankData = r.ReadBytes(h.VRomBanks * VROMBANK_SIZE);
             h.Mirror = (MirrorEnum) (h.Flags6 & 0x01);
-            h.RamBankData = new byte[16384];
+            h.RamBankData = new byte[0x2000];
 
             if (h.VRomBanks == 0)
             {
@@ -105,14 +105,14 @@ namespace Fami.Core
             return Mapper.PpuMapWrite(address, value);
         }
 
-        public void WriteState(ref byte[] buffer)
+        public void WriteState(Stream stream)
         {
-            Mapper.WriteState(ref buffer);
+            Mapper.WriteState(stream);
         }
 
-        public void ReadState(byte[] buffer)
+        public void ReadState(Stream stream)
         {
-            Mapper.ReadState(buffer);
+            Mapper.ReadState(stream);
         }
     }
 }

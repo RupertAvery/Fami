@@ -1,6 +1,6 @@
 ﻿namespace Fami.Core
 {
-    public class SpriteScanline
+    public struct SpriteScanline
     {
         public uint X { get; set; }
         public uint Y { get; set; }

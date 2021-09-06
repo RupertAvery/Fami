@@ -11,7 +11,7 @@
         public byte EnhanceGreen { get; set; }
         public byte EnhanceBlue { get; set; }
 
-        public uint Register
+        public byte Register
         {
             get
             {
