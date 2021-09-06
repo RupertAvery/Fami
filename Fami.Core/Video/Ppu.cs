@@ -1288,12 +1288,12 @@ namespace Fami.Core
                 {
                     // Sprite zero is a collision between foreground and background
                     // so they must both be enabled
-                    if (ppu_mask.RenderBackground == 1 & ppu_mask.RenderSprites == 1)
+                    if (ppu_mask.RenderBackground == 1 && ppu_mask.RenderSprites == 1)
                     {
                         // The left edge of the screen has specific switches to control
                         // its appearance. This is used to smooth inconsistencies when
                         // scrolling (since sprites x coord must be >= 0)
-                        if (!(ppu_mask.RenderBackgroundLeft == 1 | ppu_mask.RenderSpritesleft == 1))
+                        if (!(ppu_mask.RenderBackgroundLeft == 1 || ppu_mask.RenderSpritesleft == 1))
                         {
                             if (cycle >= 9 && cycle < 256)
                             {
@@ -1313,8 +1313,16 @@ namespace Fami.Core
 
             if (cycle > 0 && cycle < 256 && scanline > 0 && scanline < 240)
             {
-                buffer[cycle - 1 + scanline * 256] =
-                    palScreen[PpuRead(0x3F00 + (palette << 2) + pixel) & 0x3F];
+                if ((cycle <= 8 && ppu_mask.RenderBackgroundLeft == 0))
+                {
+                    buffer[cycle - 1 + scanline * 256] =
+                        palScreen[PpuRead(0x3F00) & 0x3F];
+                }
+                else
+                {
+                    buffer[cycle - 1 + scanline * 256] =
+                        palScreen[PpuRead(0x3F00 + (palette << 2) + pixel) & 0x3F];
+                }
             }
 
             cycle++;
