@@ -36,29 +36,43 @@ namespace Fami
 
         private bool _pause;
         private bool _frameAdvance;
+        private bool _rewind;
 
         private readonly Cpu6502State _nes;
-        public MemoryStream[] States = new MemoryStream[256];
+        private const int MAX_REWIND_BUFFER = 512;
+        private readonly MemoryStream[] _rewindStateBuffer = new MemoryStream[MAX_REWIND_BUFFER];
 
-        public uint StateHead = 0;
-        public uint StateTail = 0;
-        public uint Frames;
-        public bool HasState;
+        private int _rewindStateHead = 0;
+        private int _rewindStateTail = 0;
+        private uint _frames;
+        private bool _hasState;
 
         private readonly AudioProvider _audioProvider;
         private readonly VideoProvider _videoProvider;
 
-        private IntPtr Window;
+        private readonly IntPtr Window;
+
+        private void SaveState(Stream stream)
+        {
+            _nes.WriteState(stream);
+            _nes.Ppu.WriteState(stream);
+            _nes.Cartridge.WriteState(stream);
+        }
+
+        private void LoadState(Stream stream)
+        {
+            _nes.ReadState(stream);
+            _nes.Ppu.ReadState(stream);
+            _nes.Cartridge.ReadState(stream);
+        }
 
         public void SaveState()
         {
             using (var file = new FileStream("state01.sav", FileMode.Create, FileAccess.Write))
             {
-                _nes.WriteState(file);
-                _nes.Ppu.WriteState(file);
-                _nes.Cartridge.WriteState(file);
+                SaveState(file);
             }
-            HasState = true;
+            _hasState = true;
         }
 
         public void LoadState()
@@ -67,18 +81,16 @@ namespace Fami
             {
                 using (var file = new FileStream("state01.sav", FileMode.Open, FileAccess.Read))
                 {
-                    _nes.ReadState(file);
-                    _nes.Ppu.ReadState(file);
-                    _nes.Cartridge.ReadState(file);
+                    LoadState(file);
                 }
             }
         }
 
         public Main()
         {
-            for (var i = 0; i < 256; i++)
+            for (var i = 0; i < MAX_REWIND_BUFFER; i++)
             {
-                States[i] = new MemoryStream();
+                _rewindStateBuffer[i] = new MemoryStream();
             }
 
             _nes = new Cpu6502State();
@@ -103,6 +115,23 @@ namespace Fami
                 {
                     _threadSync.WaitOne();
                     RunFrame();
+
+                    if (_rewind)
+                    {
+                        _rewindStateHead--;
+                        if (_rewindStateHead < 0)
+                        {
+                            _rewindStateHead = MAX_REWIND_BUFFER - 1;
+                        }
+                        if (_rewindStateHead == _rewindStateTail)
+                        {
+                            _rewind = false;
+                        }
+                        _rewindStateBuffer[_rewindStateHead].Position = 0;
+                        LoadState(_rewindStateBuffer[_rewindStateHead]);
+                    }
+
+
                     while (!_sync)
                     {
                         RunFrame();
@@ -112,6 +141,28 @@ namespace Fami
 
                         _audioProvider.AudioReady(lsamples);
                     }
+
+                    if (!_rewind)
+                    {
+                        _rewindStateBuffer[_rewindStateHead].Position = 0;
+                        SaveState(_rewindStateBuffer[_rewindStateHead]);
+
+                        _rewindStateHead++;
+                        if (_rewindStateHead >= MAX_REWIND_BUFFER)
+                        {
+                            _rewindStateHead = 0;
+                        }
+
+                        if (_rewindStateHead == _rewindStateTail)
+                        {
+                            _rewindStateTail = _rewindStateHead + 1;
+                            if (_rewindStateTail >= MAX_REWIND_BUFFER)
+                            {
+                                _rewindStateTail = 0;
+                            }
+                        }
+                    }
+
 
                     if (_saveStatePending)
                     {
@@ -149,17 +200,8 @@ namespace Fami
                 _cyclesLeft -= (int)_nes.Step();
             }
 
-            if (Frames % 4 == 0)
-            {
-                //_nes.Ppu.WriteState(States[StateHead]);
-                StateHead++;
-                if (StateHead > 255)
-                {
-                    StateHead = 0;
-                }
-            }
 
-            Frames++;
+            _frames++;
         }
 
         public void Test()
@@ -374,7 +416,13 @@ namespace Fami
                             Console.WriteLine("Frame Advanced");
                             _frameAdvance = true;
                         }
-
+                        break;
+                    case SDL_Keycode.SDLK_BACKSPACE:
+                        if (!_rewind)
+                        {
+                            Console.WriteLine("Rewinding...");
+                            _rewind = true;
+                        }
                         break;
                 }
             }
@@ -411,6 +459,9 @@ namespace Fami
                         break;
                     case SDL_Keycode.SDLK_SPACE:
                         _sync = true;
+                        break;
+                    case SDL_Keycode.SDLK_BACKSPACE:
+                        _rewind = false;
                         break;
 
                 }
