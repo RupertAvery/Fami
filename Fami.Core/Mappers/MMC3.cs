@@ -15,7 +15,7 @@ namespace Fami.Core.Mappers
         private bool enable_sram;
         private bool enable_write_protect;
 
-        private uint[] _bankRegister = new uint[8];
+        private byte[] _bankRegister = new byte[8];
         protected uint[] _chrBankOffsets = new uint[8];
         protected uint[] _prgBankOffsets;
 
@@ -82,8 +82,7 @@ namespace Fami.Core.Mappers
                 else
                 {
                     // Bank data
-                    _bankRegister[_bankRegisterSelect] = value;
-
+                    _bankRegister[_bankRegisterSelect] = (byte)value;
                 }
                 UpdateOffsets();
                 return true;
@@ -154,7 +153,7 @@ namespace Fami.Core.Mappers
 
             writer.Write((byte)_cartridge.Mirror);
 
-            //writer.Write(_bankRegister, 0, _bankRegister.Length);
+            writer.Write(_bankRegister, 0, _bankRegister.Length);
             //writer.Write(_chrBankOffsets, 0, _chrBankOffsets.Length);
             //writer.Write(_prgBankOffsets, 0, _prgBankOffsets.Length);
             writer.Write(_cartridge.VRomBankData, 0, _cartridge.VRomBankData.Length);
@@ -177,7 +176,7 @@ namespace Fami.Core.Mappers
 
             _cartridge.Mirror = (MirrorEnum)reader.ReadByte();
 
-            //_bankRegister = reader.ReadUInt32Array(_bankRegister.Length);
+            reader.Read(_bankRegister, 0, _bankRegister.Length);
             //_chrBankOffsets = reader.ReadUInt32Array(_chrBankOffsets.Length);
             //_prgBankOffsets = reader.ReadUInt32Array(_prgBankOffsets.Length);
             reader.Read(_cartridge.VRomBankData, 0, _cartridge.VRomBankData.Length);
@@ -192,15 +191,15 @@ namespace Fami.Core.Mappers
             switch (_prgSelect)
             {
                 case 0:
-                    _prgBankOffsets[0] = _bankRegister[6] * 0x2000;
-                    _prgBankOffsets[1] = _bankRegister[7] * 0x2000;
+                    _prgBankOffsets[0] = _bankRegister[6] * 0x2000U;
+                    _prgBankOffsets[1] = _bankRegister[7] * 0x2000U;
                     _prgBankOffsets[2] = _lastBankOffset;
                     _prgBankOffsets[3] = _lastBankOffset + 0x2000;
                     break;
                 case 1:
                     _prgBankOffsets[0] = _lastBankOffset;
-                    _prgBankOffsets[1] = _bankRegister[7] * 0x2000;
-                    _prgBankOffsets[2] = _bankRegister[6] * 0x2000;
+                    _prgBankOffsets[1] = _bankRegister[7] * 0x2000U;
+                    _prgBankOffsets[2] = _bankRegister[6] * 0x2000U;
                     _prgBankOffsets[3] = _lastBankOffset + 0x2000;
                     break;
             }
@@ -208,10 +207,10 @@ namespace Fami.Core.Mappers
             switch (_chrSelect)
             {
                 case 0:
-                    _chrBankOffsets[0] = _bankRegister[0] & 0xFE;
-                    _chrBankOffsets[1] = _bankRegister[0] | 0x01;
-                    _chrBankOffsets[2] = _bankRegister[1] & 0xFE;
-                    _chrBankOffsets[3] = _bankRegister[1] | 0x01;
+                    _chrBankOffsets[0] = _bankRegister[0] & 0xFEU;
+                    _chrBankOffsets[1] = _bankRegister[0] | 0x01U;
+                    _chrBankOffsets[2] = _bankRegister[1] & 0xFEU;
+                    _chrBankOffsets[3] = _bankRegister[1] | 0x01U;
                     _chrBankOffsets[4] = _bankRegister[2];
                     _chrBankOffsets[5] = _bankRegister[3];
                     _chrBankOffsets[6] = _bankRegister[4];
@@ -222,10 +221,10 @@ namespace Fami.Core.Mappers
                     _chrBankOffsets[1] = _bankRegister[3];
                     _chrBankOffsets[2] = _bankRegister[4];
                     _chrBankOffsets[3] = _bankRegister[5];
-                    _chrBankOffsets[4] = _bankRegister[0] & 0xFE;
-                    _chrBankOffsets[5] = _bankRegister[0] | 0x01;
-                    _chrBankOffsets[6] = _bankRegister[1] & 0xFE;
-                    _chrBankOffsets[7] = _bankRegister[1] | 0x01;
+                    _chrBankOffsets[4] = _bankRegister[0] & 0xFEU;
+                    _chrBankOffsets[5] = _bankRegister[0] | 0x01U;
+                    _chrBankOffsets[6] = _bankRegister[1] & 0xFEU;
+                    _chrBankOffsets[7] = _bankRegister[1] | 0x01U;
                     break;
             }
 
