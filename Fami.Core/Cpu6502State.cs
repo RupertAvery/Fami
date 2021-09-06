@@ -27,7 +27,7 @@ namespace Fami.Core
         public uint U;  // bit 5
         public uint B;  // bit 4
         public uint D;  // bit 3
-        public uint I;  // bit 2
+        public uint I { get; set; }  // bit 2
         public uint Z;  // bit 1
         public uint C;  // bit 0
 
@@ -199,8 +199,8 @@ namespace Fami.Core
             Push((PC & 0xFF)); // Push the low byte of the PC
             B = 0;
             U = 1;
-            I = 1;
             Push(P);
+            I = 1;
             PC = BusRead(0xFFFA) + BusRead(0xFFFB) * 0x100; // Jump to NMI handler
             return 7;
         }
@@ -212,8 +212,8 @@ namespace Fami.Core
             Push((PC & 0xFF)); // Push the low byte of the PC
             B = 0;
             U = 1;
-            I = 1;
             Push(P);
+            I = 1;
             PC = BusRead(0xFFFE) + BusRead(0xFFFF) * 0x100; // Jump to IRQ handler
             return 7;
         }
