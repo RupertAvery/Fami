@@ -442,6 +442,30 @@ namespace Fami.Core
                     if (address >= 0x0C00 && address <= 0x0FFF)
                         data = tblName[1, address & 0x03FF];
                 }
+                else if (_cart.Mirror == MirrorEnum.Upper)
+                {
+                    // Vertical
+                    if (address >= 0x0000 && address <= 0x03FF)
+                        data = tblName[0, address & 0x03FF];
+                    if (address >= 0x0400 && address <= 0x07FF)
+                        data = tblName[0, address & 0x03FF];
+                    if (address >= 0x0800 && address <= 0x0BFF)
+                        data = tblName[0, address & 0x03FF];
+                    if (address >= 0x0C00 && address <= 0x0FFF)
+                        data = tblName[0, address & 0x03FF];
+                }
+                else if (_cart.Mirror == MirrorEnum.Lower)
+                {
+                    // Vertical
+                    if (address >= 0x0000 && address <= 0x03FF)
+                        data = tblName[1, address & 0x03FF];
+                    if (address >= 0x0400 && address <= 0x07FF)
+                        data = tblName[1, address & 0x03FF];
+                    if (address >= 0x0800 && address <= 0x0BFF)
+                        data = tblName[1, address & 0x03FF];
+                    if (address >= 0x0C00 && address <= 0x0FFF)
+                        data = tblName[1, address & 0x03FF];
+                }
             }
             else if (address >= 0x3F00 && address <= 0x3FFF)
             {
@@ -493,6 +517,30 @@ namespace Fami.Core
                         tblName[0, address & 0x03FF] = (byte)data;
                     if (address >= 0x0400 && address <= 0x07FF)
                         tblName[0, address & 0x03FF] = (byte)data;
+                    if (address >= 0x0800 && address <= 0x0BFF)
+                        tblName[1, address & 0x03FF] = (byte)data;
+                    if (address >= 0x0C00 && address <= 0x0FFF)
+                        tblName[1, address & 0x03FF] = (byte)data;
+                }
+                else if (_cart.Mirror == MirrorEnum.Upper)
+                {
+                    // Upper
+                    if (address >= 0x0000 && address <= 0x03FF)
+                        tblName[0, address & 0x03FF] = (byte)data;
+                    if (address >= 0x0400 && address <= 0x07FF)
+                        tblName[0, address & 0x03FF] = (byte)data;
+                    if (address >= 0x0800 && address <= 0x0BFF)
+                        tblName[0, address & 0x03FF] = (byte)data;
+                    if (address >= 0x0C00 && address <= 0x0FFF)
+                        tblName[0, address & 0x03FF] = (byte)data;
+                }
+                else if (_cart.Mirror == MirrorEnum.Lower)
+                {
+                    // Lower
+                    if (address >= 0x0000 && address <= 0x03FF)
+                        tblName[1, address & 0x03FF] = (byte)data;
+                    if (address >= 0x0400 && address <= 0x07FF)
+                        tblName[1, address & 0x03FF] = (byte)data;
                     if (address >= 0x0800 && address <= 0x0BFF)
                         tblName[1, address & 0x03FF] = (byte)data;
                     if (address >= 0x0C00 && address <= 0x0FFF)

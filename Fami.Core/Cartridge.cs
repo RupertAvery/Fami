@@ -72,6 +72,7 @@ namespace Fami.Core
                 1 => new Mapper001(h),
                 2 => new Mapper002(h),
                 4 => new MMC3(h),
+                7 => new AxROM(h),
                 _ => throw new UnsupportedMapperException(mapperId)
             };
             return h;
