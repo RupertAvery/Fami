@@ -5,7 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Fami.Core;
-using SDL2;
+using Fami.Input;
 using static SDL2.SDL;
 
 namespace Fami
@@ -31,12 +31,10 @@ namespace Fami
         private string _romPath;
         private bool _resetPending;
 
-
-        private uint _controller1State = 0;
-
         private bool _pause;
         private bool _frameAdvance;
         private bool _rewind;
+        private int stateSlot = 1;
 
         private readonly Cpu6502State _nes;
         private const int MAX_REWIND_BUFFER = 512;
@@ -49,6 +47,7 @@ namespace Fami
 
         private readonly AudioProvider _audioProvider;
         private readonly VideoProvider _videoProvider;
+        private readonly InputProvider _inputProvider;
 
         private readonly IntPtr Window;
 
@@ -66,9 +65,14 @@ namespace Fami
             _nes.Cartridge.ReadState(stream);
         }
 
+        private string GetStateSavePath()
+        {
+            return Path.Join(romDirectory, $"{romFilename}.s{stateSlot:00}");
+        }
+
         public void SaveState()
         {
-            using (var file = new FileStream("state01.sav", FileMode.Create, FileAccess.Write))
+            using (var file = new FileStream(GetStateSavePath(), FileMode.Create, FileAccess.Write))
             {
                 SaveState(file);
             }
@@ -77,9 +81,10 @@ namespace Fami
 
         public void LoadState()
         {
-            if (File.Exists("state01.sav"))
+            var path = GetStateSavePath();
+            if (File.Exists(path))
             {
-                using (var file = new FileStream("state01.sav", FileMode.Open, FileAccess.Read))
+                using (var file = new FileStream(path, FileMode.Open, FileAccess.Read))
                 {
                     LoadState(file);
                 }
@@ -95,16 +100,65 @@ namespace Fami
 
             _nes = new Cpu6502State();
 
-            SDL.SDL_Init(SDL.SDL_INIT_AUDIO | SDL.SDL_INIT_VIDEO);
+            SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK);
 
-            Window = SDL.SDL_CreateWindow("Fami", 0, 0, WIDTH * 4, HEIGHT * 4,
-                SDL.SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL.SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
+            Window = SDL_CreateWindow("Fami", 0, 0, WIDTH * 4, HEIGHT * 4,
+                SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
 
             _videoProvider = new VideoProvider(Window, WIDTH, HEIGHT);
             _audioProvider = new AudioProvider();
+            _inputProvider = new InputProvider(ControllerEvent);
 
             _videoProvider.Initialize();
             _audioProvider.Initialize();
+        }
+
+        private void ControllerEvent(object sender, ControllerEventArgs args)
+        {
+            switch (args.Event)
+            {
+                case ControllerButtonEvent.UP:
+                    if (((uint)args.Button & 0x100) == 0x100)
+                    {
+                        _nes.Controller[args.Player] &= ~(uint)args.Button;
+                    }
+                    else
+                    {
+                        switch (args.Button)
+                        {
+                            case ControllerButtonEnum.Rewind:
+                                _rewind = false;
+                                break;
+                        }
+                    }
+                    break;
+                case ControllerButtonEvent.DOWN:
+                    if (((uint) args.Button & 0x100) == 0x100)
+                    {
+                        _nes.Controller[args.Player] |= (uint) args.Button;
+                    }
+                    else
+                    {
+                        switch (args.Button)
+                        {
+                            case ControllerButtonEnum.Rewind:
+                                _rewind = true;
+                                break;
+                            case ControllerButtonEnum.SaveState:
+                                _saveStatePending = true;
+                                break;
+                            case ControllerButtonEnum.LoadState:
+                                _loadStatePending = true;
+                                break;
+                            case ControllerButtonEnum.NextState:
+                                break;
+                            case ControllerButtonEnum.PreviousState:
+                                break;
+                        }
+                    }
+
+                    break;
+            }
         }
 
         public void EmulationThreadHandler()
@@ -189,7 +243,7 @@ namespace Fami
                 //Excepted = true;
             }
         }
-        
+
         public void RunFrame()
         {
             _cyclesRan += CYCLES_PER_FRAME;
@@ -214,17 +268,24 @@ namespace Fami
             _nes.Execute();
         }
 
+        private string romDirectory;
+        private string romFilename;
+
         public void Load(string rompath)
         {
+            romDirectory = "";
+            romFilename = "";
+
             Cartridge cart = null;
             _nes.Init();
+            
             if (Path.GetExtension(rompath).ToLower() == ".zip")
             {
                 using var zipFile = ZipFile.Open(rompath, ZipArchiveMode.Read);
                 var nesFile = zipFile.Entries.FirstOrDefault(z => Path.GetExtension(z.Name).ToLower() == ".nes");
                 if (nesFile == default)
                 {
-
+                    throw new Exception("No ROM found in archive!");
                 }
                 else
                 {
@@ -236,6 +297,9 @@ namespace Fami
             {
                 cart = Cartridge.Load(rompath, _nes);
             }
+
+            romDirectory = Path.GetDirectoryName(rompath);
+            romFilename = Path.GetFileNameWithoutExtension(rompath);
 
             _nes.LoadCartridge(cart);
             _nes.Reset();
@@ -275,6 +339,14 @@ namespace Fami
                         case SDL_EventType.SDL_KEYDOWN:
                             KeyEvent(evt.key);
                             break;
+                        case SDL_EventType.SDL_CONTROLLERDEVICEADDED:
+                        case SDL_EventType.SDL_CONTROLLERDEVICEREMOVED:
+                            _inputProvider.HandleDeviceEvent(evt.cdevice);
+                            break;
+                        case SDL_EventType.SDL_CONTROLLERBUTTONDOWN:
+                        case SDL_EventType.SDL_CONTROLLERBUTTONUP:
+                            _inputProvider.HandleControllerEvent(evt.cbutton);
+                            break;
 
                         case SDL_EventType.SDL_DROPFILE:
                             var filename = Marshal.PtrToStringUTF8(evt.drop.file);
@@ -289,6 +361,9 @@ namespace Fami
                                 return;
                             }
 
+                            break;
+                        default:
+                            //Console.WriteLine(evt.type);
                             break;
                     }
                 }
@@ -366,116 +441,116 @@ namespace Fami
         {
             if (evtKey.type == SDL_EventType.SDL_KEYDOWN)
             {
-
-                switch (evtKey.keysym.sym)
+                if (!_inputProvider.HandleEvent(evtKey))
                 {
-                    case SDL_Keycode.SDLK_UP:
-                        _controller1State |= 0x08U;
-                        break;
-                    case SDL_Keycode.SDLK_DOWN:
-                        _controller1State |= 0x04U;
-                        break;
-                    case SDL_Keycode.SDLK_LEFT:
-                        _controller1State |= 0x02U;
-                        break;
-                    case SDL_Keycode.SDLK_RIGHT:
-                        _controller1State |= 0x01U;
-                        break;
-                    case SDL_Keycode.SDLK_RETURN:
-                        _controller1State |= 0x10U;
-                        break;
-                    case SDL_Keycode.SDLK_LSHIFT:
-                    case SDL_Keycode.SDLK_RSHIFT:
-                        _controller1State |= 0x20U;
-                        break;
-                    case SDL_Keycode.SDLK_z:
-                        _controller1State |= 0x80U;
-                        break;
-                    case SDL_Keycode.SDLK_x:
-                        _controller1State |= 0x40U;
-                        break;
-                    case SDL_Keycode.SDLK_ESCAPE:
-                        _nes.Reset();
-                        break;
-                    case SDL_Keycode.SDLK_SPACE:
-                        _sync = false;
-                        break;
-                    case SDL_Keycode.SDLK_F2:
-                        _saveStatePending = true;
-                        break;
-                    case SDL_Keycode.SDLK_F4:
-                        _loadStatePending = true;
-                        break;
-                    case SDL_Keycode.SDLK_p:
-                        _pause = !_pause;
-                        Console.WriteLine(_pause ? "Paused" : "Resumed");
-                        break;
-                    case SDL_Keycode.SDLK_f:
-                        if (_pause)
-                        {
-                            Console.WriteLine("Frame Advanced");
-                            _frameAdvance = true;
-                        }
-                        break;
-                    case SDL_Keycode.SDLK_BACKSPACE:
-                        if (!_rewind)
-                        {
-                            Console.WriteLine("Rewinding...");
-                            _rewind = true;
-                        }
-                        break;
+                    switch (evtKey.keysym.sym)
+                    {
+                        //case SDL_Keycode.SDLK_UP:
+                        //    _controller1State &= ~0x08U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_DOWN:
+                        //    _controller1State &= ~0x04U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_LEFT:
+                        //    _controller1State &= ~0x02U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_RIGHT:
+                        //    _controller1State &= ~0x01U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_RETURN:
+                        //    _controller1State &= ~0x10U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_LSHIFT:
+                        //case SDL_Keycode.SDLK_RSHIFT:
+                        //    _controller1State &= ~0x20U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_z:
+                        //    _controller1State &= ~0x80U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_x:
+                        //    _controller1State &= ~0x40U;
+                        //    break;
+                        case SDL_Keycode.SDLK_r:
+                            _nes.Reset();
+                            break;
+                        case SDL_Keycode.SDLK_BACKSLASH:
+                            _sync = false;
+                            break;
+                        case SDL_Keycode.SDLK_F2:
+                            _saveStatePending = true;
+                            break;
+                        case SDL_Keycode.SDLK_F4:
+                            _loadStatePending = true;
+                            break;
+                        case SDL_Keycode.SDLK_p:
+                            _pause = !_pause;
+                            Console.WriteLine(_pause ? "Paused" : "Resumed");
+                            break;
+                        case SDL_Keycode.SDLK_f:
+                            if (_pause)
+                            {
+                                Console.WriteLine("Frame Advanced");
+                                _frameAdvance = true;
+                            }
+                            break;
+                        case SDL_Keycode.SDLK_BACKSPACE:
+                            if (!_rewind)
+                            {
+                                Console.WriteLine("Rewinding...");
+                                _rewind = true;
+                            }
+                            break;
+                    }
                 }
             }
 
             if (evtKey.type == SDL_EventType.SDL_KEYUP)
             {
-
-                switch (evtKey.keysym.sym)
+                if (!_inputProvider.HandleEvent(evtKey))
                 {
-                    case SDL_Keycode.SDLK_UP:
-                        _controller1State &= ~0x08U;
-                        break;
-                    case SDL_Keycode.SDLK_DOWN:
-                        _controller1State &= ~0x04U;
-                        break;
-                    case SDL_Keycode.SDLK_LEFT:
-                        _controller1State &= ~0x02U;
-                        break;
-                    case SDL_Keycode.SDLK_RIGHT:
-                        _controller1State &= ~0x01U;
-                        break;
-                    case SDL_Keycode.SDLK_RETURN:
-                        _controller1State &= ~0x10U;
-                        break;
-                    case SDL_Keycode.SDLK_LSHIFT:
-                    case SDL_Keycode.SDLK_RSHIFT:
-                        _controller1State &= ~0x20U;
-                        break;
-                    case SDL_Keycode.SDLK_z:
-                        _controller1State &= ~0x80U;
-                        break;
-                    case SDL_Keycode.SDLK_x:
-                        _controller1State &= ~0x40U;
-                        break;
-                    case SDL_Keycode.SDLK_SPACE:
-                        _sync = true;
-                        break;
-                    case SDL_Keycode.SDLK_BACKSPACE:
-                        _rewind = false;
-                        break;
-
+                    switch (evtKey.keysym.sym)
+                    {
+                        //case SDL_Keycode.SDLK_UP:
+                        //    _controller1State &= ~0x08U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_DOWN:
+                        //    _controller1State &= ~0x04U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_LEFT:
+                        //    _controller1State &= ~0x02U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_RIGHT:
+                        //    _controller1State &= ~0x01U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_RETURN:
+                        //    _controller1State &= ~0x10U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_LSHIFT:
+                        //case SDL_Keycode.SDLK_RSHIFT:
+                        //    _controller1State &= ~0x20U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_z:
+                        //    _controller1State &= ~0x80U;
+                        //    break;
+                        //case SDL_Keycode.SDLK_x:
+                        //    _controller1State &= ~0x40U;
+                        //    break;
+                        case SDL_Keycode.SDLK_BACKSLASH:
+                            _sync = true;
+                            break;
+                        case SDL_Keycode.SDLK_BACKSPACE:
+                            _rewind = false;
+                            break;
+                    }
                 }
             }
-
-            _nes.Controller[0] = _controller1State;
-
         }
 
         public static double GetTime()
         {
             return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
         }
-        
+
         public void Dispose()
         {
             _threadSync.Dispose();

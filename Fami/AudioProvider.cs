@@ -6,7 +6,7 @@ namespace Fami
 {
     public class AudioProvider : IDisposable
     {
-        private const uint AUDIO_SAMPLE_FULL_THRESHOLD = 4096;
+        private const uint AUDIO_SAMPLE_FULL_THRESHOLD = 2048;
         private const int SAMPLES_PER_CALLBACK = 32;  // 735 = 44100 samples / 60 fps // 367.5? 1470
 
         private readonly IntPtr _audioTempBufPtr = Marshal.AllocHGlobal(16384);
