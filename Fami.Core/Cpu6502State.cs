@@ -43,7 +43,7 @@ namespace Fami.Core
         public bool dma_dummy;
 
         public uint[] Controller = new uint[2];
-        public uint[] ControllerState = new uint[2];
+        public uint[] ControllerRegister = new uint[2];
 
         public uint P
         {
@@ -106,7 +106,7 @@ namespace Fami.Core
         {
             var w = new BinaryReader(stream);
             w.Read(RAM, 0, RAM.Length);
-            A=w.ReadByte();
+            A = w.ReadByte();
             X = w.ReadByte();
             Y = w.ReadByte();
             S = w.ReadByte();
@@ -147,8 +147,53 @@ namespace Fami.Core
             }
             else if (address >= 0x4016 && address <= 0x4017)
             {
-                data = (ControllerState[address & 0x0001] & 0x80) > 0 ? 1U : 0;
-                ControllerState[address & 0x0001] <<= 1;
+                // Get the current value from the highest bit
+                data = (ControllerRegister[address & 0x0001] & 0x80) > 0 ? 1U : 0;
+
+                // Every time we read from this port, shift the corresponding controller register to get the next button value
+                // This assumes that the controller reading logic in the game will alawys read 8 button states out of this 
+                // register, otherwise the button reads will be out of sync and corrupted
+                ControllerRegister[address & 0x0001] <<= 1;
+
+                // Zapper/Light gun logic.
+                // Currently this activates for BOTH ports, meaning 2 Light guns at the same time
+                
+                // Always pull bit 4 (sense) high, low = detected
+                data |= 0x08;
+
+                // Read the RGB values at the target area, at the time the port is accessed
+                var pixel = Ppu.buffer[gun_cycle + gun_scanline * 256];
+                var r = (pixel >> 16) & 0xFF;
+                var g = (pixel >> 8) & 0xFF;
+                var b = (pixel) & 0xFF;
+
+                // Inverted sense (sensed = 0)
+                sense = r > 0x10 && g > 0x10 && b > 0x10 ? 0 : 1;
+
+                // technically a hack. Setting this above 0 prevents the sensor from "seeing" anything.
+                // This is set during trigger to a high value, probably enough to cover an entire frame
+                if (gun_offscreen_timeout == 0)
+                {
+                    // We only want to pull the actual data line low when PPU is at the area of interest.
+                    // the cycle and scanline values will never actually be exactly equal(?), since cycles might not
+                    // exactly align so we're good enough with checking if we're past the point
+                    if (sense == 0 && Ppu.cycle >= gun_cycle && Ppu.scanline >= gun_scanline)
+                    {
+                        // Pull the sense bit low
+                        data &= ~((uint)0x08);
+                    }
+                }
+                else
+                {
+                    gun_offscreen_timeout--;
+                }
+
+                if (trigger_timeout > 0)
+                {
+                    // pull the trigger bit high
+                    data |= 0x10;
+                    trigger_timeout--;
+                }
             }
             return data;
         }
@@ -188,7 +233,7 @@ namespace Fami.Core
             }
             else if (address >= 0x4016 && address <= 0x4017)
             {
-                ControllerState[address & 0x1] = Controller[address & 01];
+                ControllerRegister[address & 0x1] = Controller[address & 01];
             }
         }
 

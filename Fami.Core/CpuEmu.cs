@@ -16,7 +16,11 @@ namespace Fami.Core
         private const int cpuclockrate = 1789773; // NTSC
         private int old_s;
         private int _instructionCyclesLeft;
-
+        public int trigger_timeout;
+        public int sense;
+        public int gun_cycle;
+        public int gun_scanline;
+        public int gun_offscreen_timeout;
         private bool Debug { get; set; }
 
         public Cpu6502State()
