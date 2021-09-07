@@ -13,9 +13,10 @@
         Start = 0x110,
         // Standard buttons go here
         Rewind = 1,
-        SaveState = 2,
-        LoadState = 3,
-        NextState = 4,
-        PreviousState = 5,
+        FastForward = 2,
+        SaveState = 3,
+        LoadState = 4,
+        NextState = 5,
+        PreviousState = 6,
     }
 }

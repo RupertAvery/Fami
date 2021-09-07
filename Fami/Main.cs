@@ -23,7 +23,6 @@ namespace Fami
         private long _cyclesRan;
         private Thread _emulationThread;
         private readonly AutoResetEvent _threadSync = new AutoResetEvent(false);
-        private static bool _sync = true;
         private bool _saveStatePending;
         private bool _loadStatePending;
 
@@ -34,6 +33,7 @@ namespace Fami
         private bool _pause;
         private bool _frameAdvance;
         private bool _rewind;
+        private bool _fastForward;
         private int stateSlot = 1;
 
         private readonly Cpu6502State _nes;
@@ -67,7 +67,7 @@ namespace Fami
 
         private string GetStateSavePath()
         {
-            return Path.Join(romDirectory, $"{romFilename}.s{stateSlot:00}");
+            return Path.Join(_romDirectory, $"{_romFilename}.s{stateSlot:00}");
         }
 
         public void SaveState()
@@ -91,6 +91,8 @@ namespace Fami
             }
         }
 
+        private int _scale = 4;
+
         public Main()
         {
             for (var i = 0; i < MAX_REWIND_BUFFER; i++)
@@ -102,7 +104,7 @@ namespace Fami
 
             SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK);
 
-            Window = SDL_CreateWindow("Fami", 0, 0, WIDTH * 4, HEIGHT * 4,
+            Window = SDL_CreateWindow("Fami", 0, 0, WIDTH * _scale, HEIGHT * _scale,
                 SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
 
             _videoProvider = new VideoProvider(Window, WIDTH, HEIGHT);
@@ -129,13 +131,16 @@ namespace Fami
                             case ControllerButtonEnum.Rewind:
                                 _rewind = false;
                                 break;
+                            case ControllerButtonEnum.FastForward:
+                                _fastForward = false;
+                                break;
                         }
                     }
                     break;
                 case ControllerButtonEvent.DOWN:
-                    if (((uint) args.Button & 0x100) == 0x100)
+                    if (((uint)args.Button & 0x100) == 0x100)
                     {
-                        _nes.Controller[args.Player] |= (uint) args.Button;
+                        _nes.Controller[args.Player] |= (uint)args.Button;
                     }
                     else
                     {
@@ -143,6 +148,9 @@ namespace Fami
                         {
                             case ControllerButtonEnum.Rewind:
                                 _rewind = true;
+                                break;
+                            case ControllerButtonEnum.FastForward:
+                                _fastForward = true;
                                 break;
                             case ControllerButtonEnum.SaveState:
                                 _saveStatePending = true;
@@ -186,7 +194,7 @@ namespace Fami
                     }
 
 
-                    while (!_sync)
+                    while (_fastForward)
                     {
                         RunFrame();
                         _videoProvider.Render(_nes.Ppu.buffer);
@@ -268,17 +276,17 @@ namespace Fami
             _nes.Execute();
         }
 
-        private string romDirectory;
-        private string romFilename;
+        private string _romDirectory;
+        private string _romFilename;
 
         public void Load(string rompath)
         {
-            romDirectory = "";
-            romFilename = "";
+            _romDirectory = "";
+            _romFilename = "";
 
             Cartridge cart = null;
             _nes.Init();
-            
+
             if (Path.GetExtension(rompath).ToLower() == ".zip")
             {
                 using var zipFile = ZipFile.Open(rompath, ZipArchiveMode.Read);
@@ -298,13 +306,13 @@ namespace Fami
                 cart = Cartridge.Load(rompath, _nes);
             }
 
-            romDirectory = Path.GetDirectoryName(rompath);
-            romFilename = Path.GetFileNameWithoutExtension(rompath);
+            _romDirectory = Path.GetDirectoryName(rompath);
+            _romFilename = Path.GetFileNameWithoutExtension(rompath);
 
             _nes.LoadCartridge(cart);
             _nes.Reset();
         }
-
+        
         public void Run()
         {
             _emulationThread = new Thread(EmulationThreadHandler);
@@ -494,11 +502,12 @@ namespace Fami
                         //case SDL_Keycode.SDLK_x:
                         //    _controller1State &= ~0x40U;
                         //    break;
+                            break;
                         case SDL_Keycode.SDLK_r:
                             _nes.Reset();
                             break;
                         case SDL_Keycode.SDLK_BACKSLASH:
-                            _sync = false;
+                            _fastForward = true;
                             break;
                         case SDL_Keycode.SDLK_F2:
                             _saveStatePending = true;
@@ -560,7 +569,7 @@ namespace Fami
                         //    _controller1State &= ~0x40U;
                         //    break;
                         case SDL_Keycode.SDLK_BACKSLASH:
-                            _sync = true;
+                            _fastForward = false;
                             break;
                         case SDL_Keycode.SDLK_BACKSPACE:
                             _rewind = false;
@@ -570,7 +579,7 @@ namespace Fami
             }
         }
 
-        public static double GetTime()
+        private static double GetTime()
         {
             return (double)SDL_GetPerformanceCounter() / (double)SDL_GetPerformanceFrequency();
         }
