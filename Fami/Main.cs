@@ -577,6 +577,9 @@ namespace Fami
 
         public void Dispose()
         {
+            // Wait for renderers to finish what they're doing
+            // Not guaranteed, but it works
+            Thread.Sleep(500);
             _threadSync.Dispose();
             _audioProvider.Dispose();
             _videoProvider.Dispose();
