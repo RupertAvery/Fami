@@ -174,13 +174,18 @@ namespace Fami.Core
                 // This is set during trigger to a high value, probably enough to cover an entire frame
                 if (gun_offscreen_timeout == 0)
                 {
-                    // We only want to pull the actual data line low when PPU is at the area of interest.
-                    // the cycle and scanline values will never actually be exactly equal(?), since cycles might not
-                    // exactly align so we're good enough with checking if we're past the point
-                    if (sense == 0 && Ppu.cycle >= gun_cycle && Ppu.scanline >= gun_scanline)
+                    // Make sure that the sensor isn't triggered during HBlank or VBlank
+                    if (Ppu.cycle > 0 && Ppu.cycle <= 256 && Ppu.scanline > -1 && Ppu.scanline <= 240)
                     {
-                        // Pull the sense bit low
-                        data &= ~((uint)0x08);
+                        // We only want to pull the actual data line low when PPU is at the area of interest.
+                        // the cycle and scanline values will never actually be exactly equal(?), since cycles might not
+                        // exactly align so we're good enough with checking if we're past the point
+                        if (sense == 0 && Ppu.cycle >= gun_cycle && Ppu.scanline >= gun_scanline)
+                        {
+                            // Pull the sense bit low
+                            data &= ~((uint)0x08);
+                        }
+
                     }
                 }
                 else
