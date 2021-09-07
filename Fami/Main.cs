@@ -502,7 +502,6 @@ namespace Fami
                         //case SDL_Keycode.SDLK_x:
                         //    _controller1State &= ~0x40U;
                         //    break;
-                            break;
                         case SDL_Keycode.SDLK_r:
                             _nes.Reset();
                             break;
