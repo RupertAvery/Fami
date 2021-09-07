@@ -347,6 +347,30 @@ namespace Fami
                         case SDL_EventType.SDL_CONTROLLERBUTTONUP:
                             _inputProvider.HandleControllerEvent(evt.cbutton);
                             break;
+                        case SDL_EventType.SDL_MOUSEMOTION:
+                            // Get the position on screen where the Zapper is pointed at
+                            _nes.gun_cycle = evt.motion.x / _scale;
+                            _nes.gun_scanline = evt.motion.y / _scale;
+                            break;
+                        case SDL_EventType.SDL_MOUSEBUTTONDOWN:
+                            //Console.WriteLine($"{evt.button.button}");
+
+                            // The official Zapper has a trigger mechanism that ensures that the trigger switch is
+                            // only activated for around 100ms. This value is arbitrary and was chosen based on 
+                            // the ruder.nes test rom to have a trigger time of 5, which is the same value as seen
+                            // in FCEUX. We decrement this value whenever we read from the controller port $4016/17
+                            _nes.trigger_timeout = 200;
+
+                            // Right-click emulates pointing the Zapper away from the screen while firing
+                            if (evt.button.button == 3)
+                            {
+                                // Prevent the sensor from seeing anything for some duration.
+                                // Maybe we can bind this to a key instead?
+                                // This is an arbitrary value chosen by running the emulator in release mode
+                                // and testing Duck Hunt. Firing off-screen should select the next game mode.
+                                _nes.gun_offscreen_timeout = 4500;
+                            }
+                            break;
 
                         case SDL_EventType.SDL_DROPFILE:
                             var filename = Marshal.PtrToStringUTF8(evt.drop.file);
