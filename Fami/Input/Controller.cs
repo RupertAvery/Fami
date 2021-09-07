@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using SDL2;
+using static SDL2.SDL;
 
 namespace Fami.Input
 {
@@ -9,8 +9,11 @@ namespace Fami.Input
         private IntPtr gamepad;
         private IntPtr joystick;
         private int instanceId;
-        private Dictionary<int, ControllerButtonEnum> _buttonMapping = new Dictionary<int, ControllerButtonEnum>();
+
+        private readonly Dictionary<int, ControllerButtonEnum> _buttonMapping = new Dictionary<int, ControllerButtonEnum>();
+        
         public int ControllerIndex { get; set; }
+
         public Controller()
         {
             _buttonMapping.Add(11, ControllerButtonEnum.Up);
@@ -33,15 +36,15 @@ namespace Fami.Input
         public static bool TryOpen(int deviceId, out Controller controller)
         {
             controller = new Controller();
-            controller.gamepad = SDL.SDL_GameControllerOpen(deviceId);
-            controller.joystick = SDL.SDL_GameControllerGetJoystick(controller.gamepad);
-            controller.instanceId = SDL.SDL_JoystickInstanceID(controller.joystick);
+            controller.gamepad = SDL_GameControllerOpen(deviceId);
+            controller.joystick = SDL_GameControllerGetJoystick(controller.gamepad);
+            controller.instanceId = SDL_JoystickInstanceID(controller.joystick);
             return true;
         }
 
         public void Close()
         {
-            SDL.SDL_GameControllerClose(gamepad);
+            SDL_GameControllerClose(gamepad);
         }
     }
 }

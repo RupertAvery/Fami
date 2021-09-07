@@ -30,7 +30,7 @@ namespace Fami
         private string _romPath;
         private bool _resetPending;
 
-        private bool _pause;
+        private bool _paused;
         private bool _frameAdvance;
         private bool _rewind;
         private bool _fastForward;
@@ -117,9 +117,9 @@ namespace Fami
 
         private void ControllerEvent(object sender, ControllerEventArgs args)
         {
-            switch (args.Event)
+            switch (args.EventType)
             {
-                case ControllerButtonEvent.UP:
+                case ControllerEventType.BUTTON_UP:
                     if (((uint)args.Button & 0x100) == 0x100)
                     {
                         _nes.Controller[args.Player] &= ~(uint)args.Button;
@@ -137,7 +137,7 @@ namespace Fami
                         }
                     }
                     break;
-                case ControllerButtonEvent.DOWN:
+                case ControllerEventType.BUTTON_DOWN:
                     if (((uint)args.Button & 0x100) == 0x100)
                     {
                         _nes.Controller[args.Player] |= (uint)args.Button;
@@ -169,6 +169,8 @@ namespace Fami
             }
         }
 
+        private bool _triggerPending;
+
         public void EmulationThreadHandler()
         {
             try
@@ -176,6 +178,7 @@ namespace Fami
                 while (_running)
                 {
                     _threadSync.WaitOne();
+
                     RunFrame();
 
                     if (_rewind)
@@ -312,7 +315,7 @@ namespace Fami
             _nes.LoadCartridge(cart);
             _nes.Reset();
         }
-        
+
         public void Run()
         {
             _emulationThread = new Thread(EmulationThreadHandler);
@@ -365,7 +368,7 @@ namespace Fami
 
                             // The official Zapper has a trigger mechanism that ensures that the trigger switch is
                             // only activated for around 100ms. This value is arbitrary and was chosen based on 
-                            // the ruder.nes test rom to have a trigger time of 5, which is the same value as seen
+                            // the ruder.nes test rom to have a trigger held time of 5, which is the same value as seen
                             // in FCEUX. We decrement this value whenever we read from the controller port $4016/17
                             _nes.trigger_timeout = 200;
 
@@ -407,12 +410,12 @@ namespace Fami
                 }
 
 
-                if (_pause)
+                if (_paused)
                 {
                     if (_frameAdvance)
                     {
                         _frameAdvance = false;
-                        RunFrame();
+                        _threadSync.Set();
                     }
                 }
                 else
@@ -515,11 +518,11 @@ namespace Fami
                             _loadStatePending = true;
                             break;
                         case SDL_Keycode.SDLK_p:
-                            _pause = !_pause;
-                            Console.WriteLine(_pause ? "Paused" : "Resumed");
+                            _paused = !_paused;
+                            Console.WriteLine(_paused ? "Paused" : "Resumed");
                             break;
                         case SDL_Keycode.SDLK_f:
-                            if (_pause)
+                            if (_paused)
                             {
                                 Console.WriteLine("Frame Advanced");
                                 _frameAdvance = true;
@@ -530,6 +533,10 @@ namespace Fami
                             {
                                 Console.WriteLine("Rewinding...");
                                 _rewind = true;
+                                if (_paused)
+                                {
+                                    _frameAdvance = true;
+                                }
                             }
                             break;
                     }

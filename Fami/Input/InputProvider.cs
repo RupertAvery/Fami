@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using SDL2;
+using static SDL2.SDL;
 
 namespace Fami.Input
 {
@@ -11,32 +11,45 @@ namespace Fami.Input
         private readonly Keyboard _keyboard = new Keyboard();
 
         public ControllerEvent ControllerEvent { get; set; }
-
+       
         public InputProvider(ControllerEvent controllerEvent)
         {
             ControllerEvent = controllerEvent;
         }
 
-        public bool HandleEvent(SDL.SDL_KeyboardEvent keyboardEvent)
+        public bool HandleEvent(SDL_MouseMotionEvent motionEvent)
+        {
+            // Get the position on screen where the Zapper is pointed at
+            ControllerEvent?.Invoke(null, new ControllerEventArgs() { EventType = ControllerEventType.AIM, ZapperX = motionEvent.x, ZapperY = motionEvent.y });
+            return true;
+        }
+
+        public bool HandleEvent(SDL_MouseButtonEvent buttonEvent)
+        {
+            ControllerEvent?.Invoke(null, new ControllerEventArgs() { EventType = ControllerEventType.TRIGGER });
+            return true;
+        }
+
+        public bool HandleEvent(SDL_KeyboardEvent keyboardEvent)
         {
             var handled = false;
 
             switch (keyboardEvent.type)
             {
-                case SDL.SDL_EventType.SDL_KEYUP:
+                case SDL_EventType.SDL_KEYUP:
                     {
                         if (_keyboard.TryMap(keyboardEvent.keysym.sym, out ControllerButtonEnum mappedInput))
                         {
-                            ControllerEvent?.Invoke(null, new ControllerEventArgs() { Event = ControllerButtonEvent.UP, Player = 0, Button = mappedInput });
+                            ControllerEvent?.Invoke(null, new ControllerEventArgs() { EventType = ControllerEventType.BUTTON_UP, Player = 0, Button = mappedInput });
                             handled = true;
                         }
                         break;
                     }
-                case SDL.SDL_EventType.SDL_KEYDOWN:
+                case SDL_EventType.SDL_KEYDOWN:
                     {
                         if (_keyboard.TryMap(keyboardEvent.keysym.sym, out ControllerButtonEnum mappedInput))
                         {
-                            ControllerEvent?.Invoke(null, new ControllerEventArgs() { Event = ControllerButtonEvent.DOWN, Player = 0, Button = mappedInput });
+                            ControllerEvent?.Invoke(null, new ControllerEventArgs() { EventType = ControllerEventType.BUTTON_DOWN, Player = 0, Button = mappedInput });
                             handled = true;
                         }
                         break;
@@ -45,33 +58,33 @@ namespace Fami.Input
             return handled;
         }
 
-        public bool HandleControllerEvent(SDL.SDL_ControllerButtonEvent buttonEvent)
+        public bool HandleControllerEvent(SDL_ControllerButtonEvent buttonEvent)
         {
             var handled = false;
             switch (buttonEvent.type)
             {
-                case SDL.SDL_EventType.SDL_CONTROLLERBUTTONUP:
+                case SDL_EventType.SDL_CONTROLLERBUTTONUP:
                     Console.WriteLine($"{buttonEvent.type} {buttonEvent.button} {buttonEvent.which}");
                     {
                         if (_deviceControllerMapping.TryGetValue(buttonEvent.which, out var controller))
                         {
                             if (controller.TryMap(buttonEvent.button, out ControllerButtonEnum mappedInput))
                             {
-                                ControllerEvent?.Invoke(null, new ControllerEventArgs() { Event = ControllerButtonEvent.UP, Player = controller.ControllerIndex, Button = mappedInput });
+                                ControllerEvent?.Invoke(null, new ControllerEventArgs() { EventType = ControllerEventType.BUTTON_UP, Player = controller.ControllerIndex, Button = mappedInput });
                                 handled = true;
                             }
                         }
                     }
                     break;
 
-                case SDL.SDL_EventType.SDL_CONTROLLERBUTTONDOWN:
+                case SDL_EventType.SDL_CONTROLLERBUTTONDOWN:
                     Console.WriteLine($"{buttonEvent.type} {buttonEvent.button} {buttonEvent.which}");
                     {
                         if (_deviceControllerMapping.TryGetValue(buttonEvent.which, out var controller))
                         {
                             if (controller.TryMap(buttonEvent.button, out ControllerButtonEnum mappedInput))
                             {
-                                ControllerEvent?.Invoke(null, new ControllerEventArgs() { Event = ControllerButtonEvent.DOWN, Player = controller.ControllerIndex, Button = mappedInput });
+                                ControllerEvent?.Invoke(null, new ControllerEventArgs() { EventType = ControllerEventType.BUTTON_DOWN, Player = controller.ControllerIndex, Button = mappedInput });
                                 handled = true;
                             }
                         }
@@ -83,13 +96,13 @@ namespace Fami.Input
             return handled;
         }
 
-        public void HandleDeviceEvent(SDL.SDL_ControllerDeviceEvent deviceEvent)
+        public void HandleDeviceEvent(SDL_ControllerDeviceEvent deviceEvent)
         {
             //Console.WriteLine($"{deviceEvent.type} {deviceEvent.which}");
 
             switch (deviceEvent.type)
             {
-                case SDL.SDL_EventType.SDL_CONTROLLERDEVICEADDED:
+                case SDL_EventType.SDL_CONTROLLERDEVICEADDED:
                     {
                         if (Controller.TryOpen(deviceEvent.which, out var controller))
                         {
@@ -98,7 +111,7 @@ namespace Fami.Input
 
                     }
                     break;
-                case SDL.SDL_EventType.SDL_CONTROLLERDEVICEREMOVED:
+                case SDL_EventType.SDL_CONTROLLERDEVICEREMOVED:
                     {
                         if (_deviceControllerMapping.TryGetValue(deviceEvent.which, out var controller))
                         {
