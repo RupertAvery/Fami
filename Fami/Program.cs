@@ -24,12 +24,17 @@ namespace Fami
                 //var rom = @"D:\roms\NES\nes-test-roms\scrolltest\scroll.nes";
                 //var rom = @"D:\roms\NES\nes-test-roms\mmc3_irq_tests\1.Clocking.nes";
                 //rom = @"D:\roms\NES\Adventure Island 3.zip";
+                //rom = @"D:\roms\NES\Duck Hunt (JUE).zip";
+                //rom = @"D:\roms\NES\ruder.nes";
                 //rom = @"D:\roms\NES\Super Mario Bros 3.zip";
-                rom = @"D:\roms\NES\Final Fantasy 3 (J).zip";
+                //rom = @"D:\roms\NES\Laser Invasion (U).zip";
+                //rom = @"D:\roms\NES\Wild Gunman (JU).zip";
+                //rom = @"D:\roms\NES\Final Fantasy 3 (J).zip";
                 //rom = @"D:\roms\NES\donkey.nes";
+                //rom = @"D:\roms\NES\Willow.zip";
                 //rom = @"D:\roms\NES\Wizards & Warriors 1.zip";
                 //rom = @"D:\roms\NES\nes-test-roms\branch_timing_tests\1.Branch_Basics.nes";
-                main.Load(rom);
+                main.Load(args[0]);
                 main.Run();
             }
         }
