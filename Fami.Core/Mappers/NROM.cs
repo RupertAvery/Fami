@@ -2,11 +2,11 @@
 
 namespace Fami.Core.Mappers
 {
-    public class Mapper000 : BaseMapper
+    public class NROM : BaseMapper
     {
         private readonly int _prgBanks;
 
-        public Mapper000(Cartridge cartridge) : base(cartridge)
+        public NROM(Cartridge cartridge) : base(cartridge)
         {
             _prgBanks = cartridge.RomBanks;
         }

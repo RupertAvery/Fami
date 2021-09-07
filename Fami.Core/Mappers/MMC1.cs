@@ -5,7 +5,7 @@ using Fami.Core.Utility;
 
 namespace Fami.Core.Mappers
 {
-    public class Mapper001 : BaseMapper
+    public class MMC1 : BaseMapper
     {
         public enum ChipType { MMC1, MMC1A, MMC1B, MMC1C }
         public enum CHRBankingMode { Single, Double }
@@ -32,7 +32,7 @@ namespace Fami.Core.Mappers
         private PRGBankingMode _prgBankingMode;
 
 
-        public Mapper001(Cartridge cartridge) : base(cartridge)
+        public MMC1(Cartridge cartridge) : base(cartridge)
         {
             UpdateControl(0x0F);
             _cartridge.Mirror = MirrorEnum.Horizontal;

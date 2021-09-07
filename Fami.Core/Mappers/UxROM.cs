@@ -3,10 +3,10 @@ using System.IO;
 
 namespace Fami.Core.Mappers
 {
-    public class Mapper002 : BaseMapper
+    public class UxROM : BaseMapper
     {
         private uint _bankOffset;
-        public Mapper002(Cartridge cartridge) : base(cartridge)
+        public UxROM(Cartridge cartridge) : base(cartridge)
         {
         }
 

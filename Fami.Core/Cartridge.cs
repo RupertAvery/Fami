@@ -68,9 +68,9 @@ namespace Fami.Core
             var mapperId = ((h.Flags6 >> 4) & 0x0F) | (h.Flags7 & 0xF0);
             h.Mapper = mapperId switch
             {
-                0 => new Mapper000(h),
-                1 => new Mapper001(h),
-                2 => new Mapper002(h),
+                0 => new NROM(h),
+                1 => new MMC1(h),
+                2 => new UxROM(h),
                 4 => new MMC3(h),
                 7 => new AxROM(h),
                 _ => throw new UnsupportedMapperException(mapperId)
