@@ -33,11 +33,7 @@ namespace Fami.Core.Interface
         private int _stateSlot = 1;
 
         private Cpu6502State _nes;
-        private const int MAX_REWIND_BUFFER = 512;
-        private readonly MemoryStream[] _rewindStateBuffer = new MemoryStream[MAX_REWIND_BUFFER];
 
-        private int _rewindStateHead = 0;
-        private int _rewindStateTail = 0;
         private uint _frames;
         private bool _hasState;
 
@@ -47,6 +43,8 @@ namespace Fami.Core.Interface
         private IntPtr Window;
 
         public InputProvider InputProvider { get; private set; }
+
+        private Playback _playback;
 
         private void SaveState(Stream stream)
         {
@@ -136,10 +134,11 @@ namespace Fami.Core.Interface
                 }
             };
 
-            for (var i = 0; i < MAX_REWIND_BUFFER; i++)
+            _playback = new Playback()
             {
-                _rewindStateBuffer[i] = new MemoryStream();
-            }
+                LoadState = LoadState,
+                SaveState = SaveState
+            };
 
             _nes = new Cpu6502State();
 
@@ -150,7 +149,7 @@ namespace Fami.Core.Interface
             SDL2.SDL_ttf.TTF_Init();
 
             Window = SDL_CreateWindowFrom(form.Handle);
-            
+
             //Window = SDL_CreateWindow("Fami", 0, 0, WIDTH * _scale, HEIGHT * _scale,
             //    SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL_WindowFlags.SDL_WINDOW_RESIZABLE );
 
@@ -234,10 +233,17 @@ namespace Fami.Core.Interface
             }
         }
 
-        private bool _triggerPending;
-
         public void EmulationThreadHandler()
         {
+            void Render()
+            {
+                _videoProvider.Render(_nes.Ppu.buffer);
+
+                _nes.GetSamplesSync(out var lsamples, out int lnsamp);
+
+                _audioProvider.AudioReady(lsamples);
+            }
+
             while (_running)
             {
                 try
@@ -252,53 +258,13 @@ namespace Fami.Core.Interface
 
                     RunFrame();
 
-                    if (_rewind)
-                    {
-                        _rewindStateHead--;
-                        if (_rewindStateHead < 0)
-                        {
-                            _rewindStateHead = MAX_REWIND_BUFFER - 1;
-                        }
-                        if (_rewindStateHead == _rewindStateTail)
-                        {
-                            _rewind = false;
-                        }
-                        _rewindStateBuffer[_rewindStateHead].Position = 0;
-                        LoadState(_rewindStateBuffer[_rewindStateHead]);
-                    }
-
-
                     while (_fastForward)
                     {
                         RunFrame();
-                        _videoProvider.Render(_nes.Ppu.buffer);
-
-                        _nes.GetSamplesSync(out var lsamples, out int lnsamp);
-
-                        _audioProvider.AudioReady(lsamples);
+                        Render();
                     }
 
-                    if (!_rewind)
-                    {
-                        _rewindStateBuffer[_rewindStateHead].Position = 0;
-                        SaveState(_rewindStateBuffer[_rewindStateHead]);
-
-                        _rewindStateHead++;
-                        if (_rewindStateHead >= MAX_REWIND_BUFFER)
-                        {
-                            _rewindStateHead = 0;
-                        }
-
-                        if (_rewindStateHead == _rewindStateTail)
-                        {
-                            _rewindStateTail = _rewindStateHead + 1;
-                            if (_rewindStateTail >= MAX_REWIND_BUFFER)
-                            {
-                                _rewindStateTail = 0;
-                            }
-                        }
-                    }
-
+                    _playback.PerFrame(ref _rewind);
 
                     if (_saveStatePending)
                     {
@@ -312,11 +278,7 @@ namespace Fami.Core.Interface
                         _loadStatePending = false;
                     }
 
-                    _videoProvider.Render(_nes.Ppu.buffer);
-
-                    _nes.GetSamplesSync(out var samples, out int nsamp);
-
-                    _audioProvider.AudioReady(samples);
+                    Render();
                 }
                 catch (Exception e)
                 {
@@ -395,7 +357,7 @@ namespace Fami.Core.Interface
                 _emulationThread.Start();
             }
         }
-        
+
 
         public void Run()
         {
