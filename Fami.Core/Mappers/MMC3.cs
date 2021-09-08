@@ -235,5 +235,10 @@ namespace Fami.Core.Mappers
                 _chrBankOffsets[i] = (uint)(_chrBankOffsets[i] * 0x400 % _cartridge.VRomBankData.Length);
         }
 
+        public override void Reset()
+        {
+
+        }
+
     }
 }

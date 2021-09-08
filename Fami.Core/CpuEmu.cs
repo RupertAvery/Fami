@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using System.Threading;
 using BizHawk.Emulation.Common;
 using BizHawk.Emulation.Cores.Nintendo.NES;
 using Fami.Core.Audio;
@@ -9,7 +10,7 @@ namespace Fami.Core
 {
     public partial class Cpu6502State
     {
-        private bool running;
+        //private bool running;
         private StringBuilder log;
         private BlipBuffer blip = new BlipBuffer(4096);
         private const int blipbuffsize = 4096;
@@ -17,7 +18,6 @@ namespace Fami.Core
         private int old_s;
         private int _instructionCyclesLeft;
         public int trigger_timeout;
-        public int sense;
         public int gun_cycle;
         public int gun_scanline;
         public int gun_offscreen_timeout;
@@ -62,12 +62,10 @@ namespace Fami.Core
         {
             Ppu = new Ppu(this);
             Apu = new APU(this, null, false);
-            running = true;
             Cpu6502InstructionSet.InitCpu();
 
             blip.SetRates((uint)cpuclockrate, 44100);
         }
-
 
         public void LoadCartridge(Cartridge cart)
         {
@@ -153,7 +151,7 @@ namespace Fami.Core
             try
             {
                 Debug = true;
-                running = true;
+                var running = true;
                 while (running)
                 {
                     Step();
@@ -341,7 +339,7 @@ namespace Fami.Core
 
         private void Log(uint bytes)
         {
-            var sb = new StringBuilder();
+            var sb = new StringBuilder(256);
             for (var i = 0u; i < bytes; i++)
             {
                 sb.Append($"{BusRead(PC + i):X2} ");
@@ -352,7 +350,13 @@ namespace Fami.Core
                 sb.Append($"   ");
             }
 
-            log.AppendLine($"{PC:X4}  {sb} A:{A:X2} X:{X:X2} Y:{Y:X2} P:{P:X2} SP:{S:X2} PPU:{Ppu.scanline + 1},{Ppu.cycle} CYC:{Cycles}");
+            var logMessage =
+                $"{PC:X4}  {sb} A:{A:X2} X:{X:X2} Y:{Y:X2} P:{P:X2} SP:{S:X2} PPU:{Ppu.scanline + 1},{Ppu.cycle} CYC:{Cycles}";
+
+            Console.WriteLine(logMessage);
+            
+            //log.AppendLine(logMessage);
+
 
         }
 

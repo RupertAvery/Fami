@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+    <TargetFramework>net5.0-windows</TargetFramework>
     <PublishSingleFile>true</PublishSingleFile>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
@@ -11,6 +11,7 @@
     <PublishTrimmed>true</PublishTrimmed>
     <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
     <PublishReadyToRun>false</PublishReadyToRun>
+    <ApplicationIcon>famicon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -28,10 +29,20 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Fami.Core\Fami.Core.csproj" />
+    <ProjectReference Include="..\Fami.UI\Fami.UI.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="blip_buf.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="libfreetype-6.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="SDL2_ttf.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="zlib1.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

@@ -240,7 +240,7 @@ namespace Fami.Core
         public Ppu(Cpu6502State state)
         {
             _state = state;
-            for (var i = 0; i < 64; i++)
+            for (var i = 0; i < spriteScanline.Length; i++)
             {
                 spriteScanline[i] = new SpriteScanline();
             }

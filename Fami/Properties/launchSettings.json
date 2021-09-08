@@ -1,8 +1,7 @@
 {
   "profiles": {
     "Fami": {
-      "commandName": "Project",
-      "commandLineArgs": "\"D:\\roms\\NES\\Adventure Island 3.zip\""
+      "commandName": "Project"
     }
   }
 }

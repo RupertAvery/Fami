@@ -60,5 +60,15 @@ namespace Fami.Core.Mappers
         {
             return false;
         }
+
+        public override void Reset()
+        {
+            _bankOffset = 0;
+            //for (var i = 0; i < _cartridge.RamBankData.Length; i++)
+            //{
+            //    _cartridge.RamBankData[i] = 0x00;
+            //}
+        }
+
     }
 }

@@ -6,15 +6,13 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Fami.Core;
 using Fami.Input;
+using Fami.UI;
 using static SDL2.SDL;
 
 namespace Fami
 {
     public class Main : IDisposable
     {
-        public const int WIDTH = 256;
-        public const int HEIGHT = 240;
-
         public const int CYCLES_PER_FRAME = 89341;
         private const double NTSC_SECONDS_PER_FRAME = 1 / 60D;
         private const double PAL_SECONDS_PER_FRAME = 1 / 50D;
@@ -34,7 +32,7 @@ namespace Fami
         private bool _frameAdvance;
         private bool _rewind;
         private bool _fastForward;
-        private int stateSlot = 1;
+        private int _stateSlot = 1;
 
         private readonly Cpu6502State _nes;
         private const int MAX_REWIND_BUFFER = 512;
@@ -49,7 +47,7 @@ namespace Fami
         private readonly VideoProvider _videoProvider;
         private readonly InputProvider _inputProvider;
 
-        private readonly IntPtr Window;
+        private IntPtr Window;
 
         private void SaveState(Stream stream)
         {
@@ -67,7 +65,7 @@ namespace Fami
 
         private string GetStateSavePath()
         {
-            return Path.Join(_romDirectory, $"{_romFilename}.s{stateSlot:00}");
+            return Path.Join(_romDirectory, $"{_romFilename}.s{_stateSlot:00}");
         }
 
         public void SaveState()
@@ -75,6 +73,7 @@ namespace Fami
             using (var file = new FileStream(GetStateSavePath(), FileMode.Create, FileAccess.Write))
             {
                 SaveState(file);
+                _videoProvider.SetMessage($"Saved State #{_stateSlot}");
             }
             _hasState = true;
         }
@@ -87,14 +86,59 @@ namespace Fami
                 using (var file = new FileStream(path, FileMode.Open, FileAccess.Read))
                 {
                     LoadState(file);
+                    _videoProvider.SetMessage($"Loaded State #{_stateSlot}");
                 }
             }
         }
 
         private int _scale = 4;
 
-        public Main()
+        private void SetupEvents(MainForm form)
         {
+
+            form.SizeChanged += (sender, args) =>
+            {
+                _videoProvider.Destroy();
+                _videoProvider.Initialize();
+                _videoProvider.Clear();
+            };
+
+            form.ChangeSlot = i => _stateSlot = i;
+
+            form.SaveState = SaveState;
+            form.LoadState = LoadState;
+
+            form.LoadRom = s =>
+            {
+                try
+                {
+                    LoadInternal(s);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    return false;
+                }
+            };
+        }
+
+        private bool _justLoaded;
+
+        private void LoadInternal(string path)
+        {
+            _paused = true;
+            // Ensure frame rendering has completed so we don't overwrite anything while the emulation thread is busy
+            Thread.Sleep(200);
+            Load(path);
+            _justLoaded = true;
+            // prevent the first click fron firing when loading light gun games
+            _paused = false;
+        }
+
+        public Main(MainForm form)
+        {
+            SetupEvents(form);
+
             for (var i = 0; i < MAX_REWIND_BUFFER; i++)
             {
                 _rewindStateBuffer[i] = new MemoryStream();
@@ -102,16 +146,24 @@ namespace Fami
 
             _nes = new Cpu6502State();
 
+            _nes.Init();
+
             SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK);
 
-            Window = SDL_CreateWindow("Fami", 0, 0, WIDTH * _scale, HEIGHT * _scale,
-                SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL_WindowFlags.SDL_WINDOW_RESIZABLE);
+            SDL2.SDL_ttf.TTF_Init();
 
-            _videoProvider = new VideoProvider(Window, WIDTH, HEIGHT);
+            Window = SDL_CreateWindowFrom(form.Handle);
+
+
+            //Window = SDL_CreateWindow("Fami", 0, 0, WIDTH * _scale, HEIGHT * _scale,
+            //    SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL_WindowFlags.SDL_WINDOW_RESIZABLE );
+
+            _videoProvider = new VideoProvider(Window);
             _audioProvider = new AudioProvider();
             _inputProvider = new InputProvider(ControllerEvent);
 
             _videoProvider.Initialize();
+            _videoProvider.Clear();
             _audioProvider.Initialize();
         }
 
@@ -173,11 +225,17 @@ namespace Fami
 
         public void EmulationThreadHandler()
         {
-            try
+            while (_running)
             {
-                while (_running)
+                try
                 {
                     _threadSync.WaitOne();
+
+                    if (_resetPending)
+                    {
+                        _nes.Reset();
+                        _resetPending = false;
+                    }
 
                     RunFrame();
 
@@ -247,11 +305,11 @@ namespace Fami
 
                     _audioProvider.AudioReady(samples);
                 }
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.ToString());
-                //Excepted = true;
+                catch (Exception e)
+                {
+                    Console.WriteLine(e.ToString());
+                    //Excepted = true;
+                }
             }
         }
 
@@ -288,7 +346,7 @@ namespace Fami
             _romFilename = "";
 
             Cartridge cart = null;
-            _nes.Init();
+
 
             if (Path.GetExtension(rompath).ToLower() == ".zip")
             {
@@ -314,13 +372,21 @@ namespace Fami
 
             _nes.LoadCartridge(cart);
             _nes.Reset();
+
+            _videoProvider.SetMessage($"Loaded {_romFilename}");
+
+            if (_emulationThread == null)
+            {
+                _emulationThread = new Thread(EmulationThreadHandler);
+                _emulationThread.Name = "Emulation Core";
+                _emulationThread.Start();
+            }
         }
+
+
 
         public void Run()
         {
-            _emulationThread = new Thread(EmulationThreadHandler);
-            _emulationThread.Name = "Emulation Core";
-            _emulationThread.Start();
 
             _running = true;
 
@@ -360,10 +426,16 @@ namespace Fami
                             break;
                         case SDL_EventType.SDL_MOUSEMOTION:
                             // Get the position on screen where the Zapper is pointed at
-                            _nes.gun_cycle = evt.motion.x / _scale;
-                            _nes.gun_scanline = evt.motion.y / _scale;
+                            (_nes.gun_cycle, _nes.gun_scanline) = _videoProvider.ToScreenCoordinates(evt.motion.x, evt.motion.y);
                             break;
                         case SDL_EventType.SDL_MOUSEBUTTONDOWN:
+                            // prevent the first click fron firing when loading light gun games
+                            if (_justLoaded)
+                            {
+                                _justLoaded = false;
+                                break;
+                            }
+
                             //Console.WriteLine($"{evt.button.button}");
 
                             // The official Zapper has a trigger mechanism that ensures that the trigger switch is
@@ -387,8 +459,7 @@ namespace Fami
                             var filename = Marshal.PtrToStringUTF8(evt.drop.file);
                             try
                             {
-                                _romPath = filename;
-                                _resetPending = true;
+                                LoadInternal(filename);
                             }
                             catch
                             {
@@ -401,12 +472,6 @@ namespace Fami
                             //Console.WriteLine(evt.type);
                             break;
                     }
-                }
-
-                if (_resetPending)
-                {
-                    Load(_romPath);
-                    _resetPending = false;
                 }
 
 
@@ -506,7 +571,7 @@ namespace Fami
                         //    _controller1State &= ~0x40U;
                         //    break;
                         case SDL_Keycode.SDLK_r:
-                            _nes.Reset();
+                            _resetPending = true;
                             break;
                         case SDL_Keycode.SDLK_BACKSLASH:
                             _fastForward = true;
@@ -598,6 +663,7 @@ namespace Fami
             _threadSync.Dispose();
             _audioProvider.Dispose();
             _videoProvider.Dispose();
+            SDL2.SDL_ttf.TTF_Quit();
             SDL_AudioQuit();
             SDL_VideoQuit();
             SDL_DestroyWindow(Window);

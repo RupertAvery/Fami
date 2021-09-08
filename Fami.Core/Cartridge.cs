@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 using Fami.Core.Mappers;
 
 namespace Fami.Core
@@ -38,6 +39,7 @@ namespace Fami.Core
 
         public void Reset()
         {
+            Mapper.Reset();
         }
 
         public static Cartridge Load(Stream stream, Cpu6502State cpu)
@@ -66,6 +68,9 @@ namespace Fami.Core
 
 
             var mapperId = ((h.Flags6 >> 4) & 0x0F) | (h.Flags7 & 0xF0);
+
+            Console.WriteLine($"Mapper {mapperId}");
+
             h.Mapper = mapperId switch
             {
                 0 => new NROM(h),

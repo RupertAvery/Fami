@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using BizHawk.Emulation.Cores.Nintendo.NES;
 using Fami.Core.Audio;
 
@@ -117,12 +118,22 @@ namespace Fami.Core
 
         public void Reset()
         {
+            Cartridge.Reset();
             Ppu.Reset();
             // https://www.pagetable.com/?p=410
             S = 0xFD; // Actually 0xFF, but 3 Stack Pushes are done with writes supressed, 
             P = 0x24; // Just to align with nestest.log: I is set, U shouldn't exist, but...
             PC = BusRead(0xFFFC) + BusRead(0xFFFD) * 0x100; // Fetch the reset vector
+            I = 1;
             Cycles = 7; // takes 7 cycles to reset
+            _instructionCyclesLeft = 0;
+            dma_page = 0;
+            dma_address = 0x00;
+            dma_transfer = false;
+            for (var i = 0; i < _interrupts.Length; i++)
+            {
+                _interrupts[i] = false;
+            }
         }
 
         public uint BusRead(uint address)
@@ -161,14 +172,20 @@ namespace Fami.Core
                 // Always pull bit 4 (sense) high, low = detected
                 data |= 0x08;
 
-                // Read the RGB values at the target area, at the time the port is accessed
-                var pixel = Ppu.buffer[gun_cycle + gun_scanline * 256];
-                var r = (pixel >> 16) & 0xFF;
-                var g = (pixel >> 8) & 0xFF;
-                var b = (pixel) & 0xFF;
+                var sense = 1;
 
-                // Inverted sense (sensed = 0)
-                sense = r > 0x10 && g > 0x10 && b > 0x10 ? 0 : 1;
+                if (gun_cycle >= 0 && gun_cycle < 256 && gun_scanline >= 0 && gun_scanline < 240)
+                {
+                    // Read the RGB values at the target area, at the time the port is accessed
+                    var pixel = Ppu.buffer[gun_cycle + gun_scanline * 256];
+                    var r = (pixel >> 16) & 0xFF;
+                    var g = (pixel >> 8) & 0xFF;
+                    var b = (pixel) & 0xFF;
+
+                    // Inverted sense (sensed = 0)
+                    sense = r > 0x10 && g > 0x10 && b > 0x10 ? 0 : 1;
+
+                }
 
                 // technically a hack. Setting this above 0 prevents the sensor from "seeing" anything.
                 // This is set during trigger to a high value, probably enough to cover an entire frame
@@ -185,7 +202,6 @@ namespace Fami.Core
                             // Pull the sense bit low
                             data &= ~((uint)0x08);
                         }
-
                     }
                 }
                 else

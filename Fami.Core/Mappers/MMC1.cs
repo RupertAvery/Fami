@@ -233,5 +233,11 @@ namespace Fami.Core.Mappers
             _prgBankingMode = (PRGBankingMode)w.ReadByte();
             w.Read(_cartridge.RamBankData, 0, _cartridge.RamBankData.Length);
         }
+
+        public override void Reset()
+        {
+
+        }
+
     }
 }

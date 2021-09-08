@@ -18,6 +18,7 @@ namespace Fami.Core.Mappers
         public abstract (uint value, bool handled) PpuMapRead(uint address);
         public abstract bool PpuMapWrite(uint address, uint value);
 
+        public abstract void Reset();
         public abstract void WriteState(Stream stream);
         public abstract void ReadState(Stream stream);
     }

@@ -53,5 +53,10 @@ namespace Fami.Core.Mappers
             _bankOffset = reader.ReadUInt32();
         }
 
+        public override void Reset()
+        {
+
+        }
+
     }
 }

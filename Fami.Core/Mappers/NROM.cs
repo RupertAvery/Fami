@@ -49,5 +49,10 @@ namespace Fami.Core.Mappers
 
         }
 
+        public override void Reset()
+        {
+
+        }
+
     }
 }
