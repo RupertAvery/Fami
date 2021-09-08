@@ -1,4 +1,4 @@
-﻿namespace Fami.Input
+﻿namespace Fami.Core.Interface.Input
 {
     public enum ControllerButtonEnum
     {

@@ -4,12 +4,10 @@ using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
-using Fami.Core;
-using Fami.Input;
-using Fami.UI;
+using Fami.Core.Interface.Input;
 using static SDL2.SDL;
 
-namespace Fami
+namespace Fami.Core.Interface
 {
     public class Main : IDisposable
     {
@@ -34,7 +32,7 @@ namespace Fami
         private bool _fastForward;
         private int _stateSlot = 1;
 
-        private readonly Cpu6502State _nes;
+        private Cpu6502State _nes;
         private const int MAX_REWIND_BUFFER = 512;
         private readonly MemoryStream[] _rewindStateBuffer = new MemoryStream[MAX_REWIND_BUFFER];
 
@@ -43,11 +41,12 @@ namespace Fami
         private uint _frames;
         private bool _hasState;
 
-        private readonly AudioProvider _audioProvider;
-        private readonly VideoProvider _videoProvider;
-        private readonly InputProvider _inputProvider;
+        private AudioProvider _audioProvider;
+        private VideoProvider _videoProvider;
 
         private IntPtr Window;
+
+        public InputProvider InputProvider { get; private set; }
 
         private void SaveState(Stream stream)
         {
@@ -65,7 +64,7 @@ namespace Fami
 
         private string GetStateSavePath()
         {
-            return Path.Join(_romDirectory, $"{_romFilename}.s{_stateSlot:00}");
+            return Path.Combine(_romDirectory, $"{_romFilename}.s{_stateSlot:00}");
         }
 
         public void SaveState()
@@ -93,10 +92,15 @@ namespace Fami
 
         private int _scale = 4;
 
-        private void SetupEvents(MainForm form)
+        public void SetMapping(ControllerButtonEnum o)
+        {
+            InputProvider.SetMapping(o);
+        }
+
+        public void Initialize(IMainInterface form)
         {
 
-            form.SizeChanged += (sender, args) =>
+            form.OnHostResize = () =>
             {
                 _videoProvider.Destroy();
                 _videoProvider.Initialize();
@@ -107,6 +111,17 @@ namespace Fami
 
             form.SaveState = SaveState;
             form.LoadState = LoadState;
+            //form.ResizeWindow = (width, height) =>
+            //{
+            //    _paused = true;
+            //    Thread.Sleep(200);
+            //    //_videoProvider.Resize(width, height);
+            //    _paused = false;
+            //};
+            form.SetMapping = o =>
+            {
+                InputProvider.SetMapping(o);
+            };
 
             form.LoadRom = s =>
             {
@@ -120,24 +135,6 @@ namespace Fami
                     return false;
                 }
             };
-        }
-
-        private bool _justLoaded;
-
-        private void LoadInternal(string path)
-        {
-            _paused = true;
-            // Ensure frame rendering has completed so we don't overwrite anything while the emulation thread is busy
-            Thread.Sleep(200);
-            Load(path);
-            _justLoaded = true;
-            // prevent the first click fron firing when loading light gun games
-            _paused = false;
-        }
-
-        public Main(MainForm form)
-        {
-            SetupEvents(form);
 
             for (var i = 0; i < MAX_REWIND_BUFFER; i++)
             {
@@ -153,18 +150,34 @@ namespace Fami
             SDL2.SDL_ttf.TTF_Init();
 
             Window = SDL_CreateWindowFrom(form.Handle);
-
-
+            
             //Window = SDL_CreateWindow("Fami", 0, 0, WIDTH * _scale, HEIGHT * _scale,
             //    SDL_WindowFlags.SDL_WINDOW_SHOWN | SDL_WindowFlags.SDL_WINDOW_RESIZABLE );
 
             _videoProvider = new VideoProvider(Window);
             _audioProvider = new AudioProvider();
-            _inputProvider = new InputProvider(ControllerEvent);
+            InputProvider = new InputProvider(ControllerEvent);
 
             _videoProvider.Initialize();
             _videoProvider.Clear();
             _audioProvider.Initialize();
+        }
+
+        private bool _justLoaded;
+
+        private void LoadInternal(string path)
+        {
+            _paused = true;
+            // Ensure frame rendering has completed so we don't overwrite anything while the emulation thread is busy
+            Thread.Sleep(200);
+            Load(path);
+            _justLoaded = true;
+            // prevent the first click fron firing when loading light gun games
+            _paused = false;
+        }
+
+        public Main()
+        {
         }
 
         private void ControllerEvent(object sender, ControllerEventArgs args)
@@ -382,8 +395,7 @@ namespace Fami
                 _emulationThread.Start();
             }
         }
-
-
+        
 
         public void Run()
         {
@@ -418,11 +430,11 @@ namespace Fami
                             break;
                         case SDL_EventType.SDL_CONTROLLERDEVICEADDED:
                         case SDL_EventType.SDL_CONTROLLERDEVICEREMOVED:
-                            _inputProvider.HandleDeviceEvent(evt.cdevice);
+                            InputProvider.HandleDeviceEvent(evt.cdevice);
                             break;
                         case SDL_EventType.SDL_CONTROLLERBUTTONDOWN:
                         case SDL_EventType.SDL_CONTROLLERBUTTONUP:
-                            _inputProvider.HandleControllerEvent(evt.cbutton);
+                            InputProvider.HandleControllerEvent(evt.cbutton);
                             break;
                         case SDL_EventType.SDL_MOUSEMOTION:
                             // Get the position on screen where the Zapper is pointed at
@@ -456,7 +468,7 @@ namespace Fami
                             break;
 
                         case SDL_EventType.SDL_DROPFILE:
-                            var filename = Marshal.PtrToStringUTF8(evt.drop.file);
+                            var filename = Marshal.PtrToStringAnsi(evt.drop.file);
                             try
                             {
                                 LoadInternal(filename);
@@ -541,7 +553,7 @@ namespace Fami
         {
             if (evtKey.type == SDL_EventType.SDL_KEYDOWN)
             {
-                if (!_inputProvider.HandleEvent(evtKey))
+                if (!InputProvider.HandleEvent(evtKey))
                 {
                     switch (evtKey.keysym.sym)
                     {
@@ -610,7 +622,7 @@ namespace Fami
 
             if (evtKey.type == SDL_EventType.SDL_KEYUP)
             {
-                if (!_inputProvider.HandleEvent(evtKey))
+                if (!InputProvider.HandleEvent(evtKey))
                 {
                     switch (evtKey.keysym.sym)
                     {

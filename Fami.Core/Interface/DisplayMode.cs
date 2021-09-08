@@ -1,4 +1,4 @@
-﻿namespace Fami
+﻿namespace Fami.Core.Interface
 {
     public enum DisplayMode
     {

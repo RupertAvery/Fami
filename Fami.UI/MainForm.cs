@@ -7,25 +7,35 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Fami.Core.Interface;
+using Fami.Core.Interface.Input;
 
 namespace Fami.UI
 {
-    public partial class MainForm : Form
+
+
+    public partial class MainForm : Form, IMainInterface
     {
+        private readonly Main _main;
+        public Action OnHostResize { get; set; }
         public Func<string, bool> LoadRom { get; set; }
         public Action<int> ChangeSlot { get; set; }
         public Action LoadState { get; set; }
         public Action SaveState { get; set; }
+        public Action<int,int> ResizeWindow { get; set; }
+        public Action<ControllerButtonEnum> SetMapping { get; set; }
 
-        public MainForm()
+        public MainForm(Main main)
         {
+            _main = main;
+            SizeChanged += (sender, args) => OnHostResize?.Invoke();
             InitializeComponent();
         }
-
-
-
+        
         private void MainForm_Load(object sender, EventArgs e)
         {
+            SetSize(4);
+
             slot1ToolStripMenuItem.Click += (o, args) => { UncheckSlots(); ChangeSlot?.Invoke(1); slot1ToolStripMenuItem.Checked = true; };
             slot2ToolStripMenuItem.Click += (o, args) => { UncheckSlots(); ChangeSlot?.Invoke(2); slot2ToolStripMenuItem.Checked = true; };
             slot3ToolStripMenuItem.Click += (o, args) => { UncheckSlots(); ChangeSlot?.Invoke(3); slot3ToolStripMenuItem.Checked = true; };
@@ -39,6 +49,20 @@ namespace Fami.UI
 
             loadStateToolStripMenuItem.Click += (o, args) => LoadState?.Invoke();
             saveStateToolStripMenuItem.Click += (o, args) => SaveState?.Invoke();
+
+            x1ToolStripMenuItem.Click += (o, args) => { UncheckSizes(); SetSize(1); x1ToolStripMenuItem.Checked = true; };
+            x2ToolStripMenuItem.Click += (o, args) => { UncheckSizes(); SetSize(2); x2ToolStripMenuItem.Checked = true; };
+            x3ToolStripMenuItem.Click += (o, args) => { UncheckSizes(); SetSize(3); x3ToolStripMenuItem.Checked = true; };
+            x4ToolStripMenuItem.Click += (o, args) => { UncheckSizes(); SetSize(4); x4ToolStripMenuItem.Checked = true; };
+        }
+
+        private void SetSize(int scale)
+        {
+            //ResizeWindow?.Invoke(256 * scale, 240 * scale + menuStrip1.Height);
+            Size = new Size(256 * scale, 240 * scale + menuStrip1.Height);
+            // This resizes the window *twice*
+            //Width = 256 * scale;
+            //Height = 240 * scale + menuStrip1.Height;
         }
 
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
@@ -62,6 +86,14 @@ namespace Fami.UI
             }
         }
 
+        private void UncheckSizes()
+        {
+            x1ToolStripMenuItem.Checked = false;
+            x2ToolStripMenuItem.Checked = false;
+            x3ToolStripMenuItem.Checked = false;
+            x4ToolStripMenuItem.Checked = false;
+        }
+
         private void UncheckSlots()
         {
             slot1ToolStripMenuItem.Checked = false;
@@ -81,6 +113,12 @@ namespace Fami.UI
             changeSlotToolStripMenuItem.Enabled = enabled;
             loadStateToolStripMenuItem.Enabled = enabled;
             saveStateToolStripMenuItem.Enabled = enabled;
+        }
+
+        private void keyboardToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            var mapper = new MappingForm(_main);
+            mapper.Show(this);
         }
     }
 }

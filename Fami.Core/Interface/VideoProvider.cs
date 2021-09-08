@@ -1,8 +1,9 @@
 ﻿using System;
 using System.IO;
-using SDL2;
+using static SDL2.SDL_ttf;
+using static SDL2.SDL;
 
-namespace Fami
+namespace Fami.Core.Interface
 {
     public class VideoProvider : IDisposable
     {
@@ -25,7 +26,7 @@ namespace Fami
             Window = window;
             _displayBuf = new uint[WIDTH * HEIGHT];
             string fontsfolder = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
-            _font = SDL_ttf.TTF_OpenFont(Path.Join(fontsfolder, "ARIAL.TTF"), 12);
+            _font = TTF_OpenFont(Path.Combine(fontsfolder, "ARIAL.TTF"), 12);
 
         }
 
@@ -39,7 +40,7 @@ namespace Fami
 
         public int CanvasWidth { get; private set; }
         public int CanvasHeight { get; private set; }
-        
+
         public double Ratio { get; private set; }
 
         public (int X, int Y) ToScreenCoordinates(int x, int y)
@@ -52,14 +53,14 @@ namespace Fami
 
         public void Initialize()
         {
-            //SDL.SDL_SetWindowPosition(Window, SDL.SDL_WINDOWPOS_CENTERED, SDL.SDL_WINDOWPOS_CENTERED);
-            _renderer = SDL.SDL_CreateRenderer(Window, -1,
-                SDL.SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL.SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
+            //SDL_SetWindowPosition(Window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+            _renderer = SDL_CreateRenderer(Window, -1,
+                SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
 
-            _texture = SDL.SDL_CreateTexture(_renderer, SDL.SDL_PIXELFORMAT_ABGR8888,
-                (int)SDL.SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+            _texture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_ABGR8888,
+                (int)SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
 
-            SDL.SDL_GetWindowSize(Window, out int w, out int h);
+            SDL_GetWindowSize(Window, out int w, out int h);
 
             CanvasWidth = w;
             CanvasHeight = h;
@@ -105,9 +106,9 @@ namespace Fami
 
         public void Clear()
         {
-            SDL.SDL_RenderClear(_renderer);
-            SDL.SDL_RenderPresent(_renderer);
-            SDL.SDL_UpdateWindowSurface(Window);
+            SDL_RenderClear(_renderer);
+            SDL_RenderPresent(_renderer);
+            SDL_UpdateWindowSurface(Window);
         }
 
         public unsafe void Render(uint[] buffer)
@@ -139,9 +140,9 @@ namespace Fami
 
             //CopyPixels(Gba.Ppu.Renderer.ScreenFront, DisplayBuf, WIDTH * HEIGHT, ColorCorrection);
             fixed (void* ptr = _displayBuf)
-                SDL.SDL_UpdateTexture(_texture, IntPtr.Zero, (IntPtr)ptr, WIDTH * 4);
+                SDL_UpdateTexture(_texture, IntPtr.Zero, (IntPtr)ptr, WIDTH * 4);
 
-            SDL.SDL_Rect dest = new();
+            SDL_Rect dest = new();
 
             switch (DisplayMode)
             {
@@ -159,18 +160,22 @@ namespace Fami
                     break;
             }
 
-            SDL.SDL_RenderClear(_renderer);
-            SDL.SDL_RenderCopy(_renderer, _texture, IntPtr.Zero, ref dest);
+            SDL_RenderClear(_renderer);
+            SDL_RenderCopy(_renderer, _texture, IntPtr.Zero, ref dest);
 
             if (_messageTimeout > 0)
             {
-                SDL.SDL_Rect textLocation = new SDL.SDL_Rect() { x = 0, y = dest.h - 24, h = 24, w = WIDTH };
+                SDL_Rect textLocation = new SDL_Rect() { x = 0, y = dest.h - 24, h = 24, w = WIDTH };
+                if (_messageTimeout < 50)
+                {
+                    SDL_SetTextureAlphaMod(textTexture, (byte)(((_messageTimeout) / 50f) * 255));
+                }
 
-                var result = SDL.SDL_RenderCopy(_renderer, textTexture, IntPtr.Zero, ref textLocation);
-                //var result = SDL.SDL_BlitSurface(pTexture, IntPtr.Zero, _texture, ref textLocation);
+                var result = SDL_RenderCopy(_renderer, textTexture, IntPtr.Zero, ref textLocation);
+                //var result = SDL_BlitSurface(pTexture, IntPtr.Zero, _texture, ref textLocation);
                 if (result != 0)
                 {
-                    Console.WriteLine(SDL.SDL_GetError());
+                    Console.WriteLine(SDL_GetError());
                 }
 
                 _messageTimeout--;
@@ -180,8 +185,8 @@ namespace Fami
                 CleanMessage();
             }
 
-            SDL.SDL_RenderPresent(_renderer);
-            SDL.SDL_UpdateWindowSurface(Window);
+            SDL_RenderPresent(_renderer);
+            SDL_UpdateWindowSurface(Window);
         }
 
         private string _message;
@@ -193,8 +198,8 @@ namespace Fami
         {
             if (textSurface != IntPtr.Zero)
             {
-                SDL.SDL_FreeSurface(textSurface);
-                SDL.SDL_DestroyTexture(textTexture);
+                SDL_FreeSurface(textSurface);
+                SDL_DestroyTexture(textTexture);
                 textSurface = IntPtr.Zero;
                 textTexture = IntPtr.Zero;
             }
@@ -205,25 +210,32 @@ namespace Fami
             _message = message;
             _messageTimeout = 200;
 
-            SDL.SDL_Color foregroundColor = new SDL.SDL_Color() { a = 0xFF, r = 0xFF, g = 0xFF, b = 0xFF };
-            SDL.SDL_Color backgroundColor = new SDL.SDL_Color() { a = 0x00, r = 0x00, g = 0x00, b = 0x00 };
+            SDL_Color foregroundColor = new SDL_Color() { a = 0xFF, r = 0xFF, g = 0xFF, b = 0xFF };
+            SDL_Color backgroundColor = new SDL_Color() { a = 0x00, r = 0x00, g = 0x00, b = 0x00 };
 
-            textSurface = SDL_ttf.TTF_RenderText_Shaded(_font, _message, foregroundColor, backgroundColor);
-            textTexture = SDL.SDL_CreateTextureFromSurface(_renderer, textSurface);
+            textSurface = TTF_RenderText_Blended(_font, _message, foregroundColor);
+            textTexture = SDL_CreateTextureFromSurface(_renderer, textSurface);
+            SDL_SetTextureAlphaMod(textTexture, 255);
         }
 
 
         public void Destroy()
         {
-            SDL.SDL_DestroyTexture(_texture);
-            SDL.SDL_DestroyRenderer(_renderer);
+            SDL_DestroyTexture(_texture);
+            SDL_DestroyRenderer(_renderer);
         }
 
         public void Dispose()
         {
-            SDL_ttf.TTF_CloseFont(_font);
+            TTF_CloseFont(_font);
             Destroy();
         }
 
+        public void Resize(int width, int height)
+        {
+            //Destroy();
+            //SDL_SetWindowSize(Window, width, height);
+            //Initialize();
+        }
     }
 }

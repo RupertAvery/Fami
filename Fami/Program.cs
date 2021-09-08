@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using Fami.Core.Interface;
 using Fami.UI;
 using static SDL2.SDL;
 
@@ -10,12 +11,12 @@ namespace Fami
         [STAThread]
         static void Main(string[] args)
         {
-            using (var form = new MainForm())
+            using (var main = new Main())
             {
-                form.Show();
-
-                using (var main = new Main(form))
+                using (var form = new MainForm(main))
                 {
+                    main.Initialize(form);
+                    form.Show();
                     string rom;
                     //main.Test();
                     ////main.Load(args[0]);
@@ -46,7 +47,9 @@ namespace Fami
                     }
                     main.Run();
                 }
+
             }
+
 
         }
     }

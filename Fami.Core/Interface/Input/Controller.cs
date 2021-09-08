@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using static SDL2.SDL;
 
-namespace Fami.Input
+namespace Fami.Core.Interface.Input
 {
     public class Controller
     {

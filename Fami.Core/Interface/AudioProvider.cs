@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using static SDL2.SDL;
 
-namespace Fami
+namespace Fami.Core.Interface
 {
     public class AudioProvider : IDisposable
     {

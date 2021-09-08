@@ -1,7 +1,8 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using static SDL2.SDL;
 
-namespace Fami.Input
+namespace Fami.Core.Interface.Input
 {
     public class Keyboard
     {
@@ -23,5 +24,35 @@ namespace Fami.Input
         {
             return _keyMapping.TryGetValue(keyCode, out mappedInput);
         }
+
+        public bool TrySetMap(SDL_Keycode key, ControllerButtonEnum target)
+        {
+            if (TryGetMap(target, out var oldkey))
+            {
+                _keyMapping.Remove(oldkey.Value);
+            }
+            _keyMapping[key] = target;
+            return true;
+        }
+
+        public IEnumerable<KeyValuePair<SDL_Keycode, ControllerButtonEnum>> GetMappings()
+        {
+            return _keyMapping;
+        }
+
+        public bool TryGetMap(ControllerButtonEnum button, out SDL_Keycode? key)
+        {
+            key = null;
+
+            if (_keyMapping.ContainsValue(button))
+            {
+                var mapping = _keyMapping.First(m => m.Value == button);
+                key = mapping.Key;
+                return true;
+            }
+
+            return false;
+        }
+
     }
 }

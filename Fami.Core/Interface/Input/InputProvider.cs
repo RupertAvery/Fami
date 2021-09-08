@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using static SDL2.SDL;
 
-namespace Fami.Input
+namespace Fami.Core.Interface.Input
 {
     public class InputProvider
     {
@@ -11,7 +12,7 @@ namespace Fami.Input
         private readonly Keyboard _keyboard = new Keyboard();
 
         public ControllerEvent ControllerEvent { get; set; }
-       
+
         public InputProvider(ControllerEvent controllerEvent)
         {
             ControllerEvent = controllerEvent;
@@ -43,15 +44,28 @@ namespace Fami.Input
                             ControllerEvent?.Invoke(null, new ControllerEventArgs() { EventType = ControllerEventType.BUTTON_UP, Player = 0, Button = mappedInput });
                             handled = true;
                         }
+
                         break;
                     }
                 case SDL_EventType.SDL_KEYDOWN:
                     {
-                        if (_keyboard.TryMap(keyboardEvent.keysym.sym, out ControllerButtonEnum mappedInput))
+                        if (_mappingMode)
                         {
-                            ControllerEvent?.Invoke(null, new ControllerEventArgs() { EventType = ControllerEventType.BUTTON_DOWN, Player = 0, Button = mappedInput });
-                            handled = true;
+                            if (_keyboard.TrySetMap(keyboardEvent.keysym.sym, _mappingTarget))
+                            {
+                                _mappingMode = false;
+                                handled = true;
+                            }
                         }
+                        else
+                        {
+                            if (_keyboard.TryMap(keyboardEvent.keysym.sym, out ControllerButtonEnum mappedInput))
+                            {
+                                ControllerEvent?.Invoke(null, new ControllerEventArgs() { EventType = ControllerEventType.BUTTON_DOWN, Player = 0, Button = mappedInput });
+                                handled = true;
+                            }
+                        }
+
                         break;
                     }
             }
@@ -121,6 +135,31 @@ namespace Fami.Input
                     }
                     break;
             }
+        }
+
+
+        private bool _mappingMode = true;
+        private ControllerButtonEnum _mappingTarget;
+
+        public void SetMapping(ControllerButtonEnum button)
+        {
+            _mappingMode = true;
+            _mappingTarget = button;
+        }
+
+        public void ClearMapping(ControllerButtonEnum button)
+        {
+            //_mappingTarget = button;
+        }
+
+        public string GetMapping(ControllerButtonEnum button)
+        {
+            if (_keyboard.TryGetMap(button, out var key))
+            {
+                return key.ToString();
+            }
+
+            return "";
         }
     }
 }

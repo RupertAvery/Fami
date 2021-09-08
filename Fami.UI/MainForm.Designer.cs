@@ -50,6 +50,15 @@ namespace Fami.UI
             this.saveStateToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem2 = new System.Windows.Forms.ToolStripSeparator();
             this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.optionsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.controllersToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.keyboardToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.gamepadToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.windowSizeToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.x1ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.x2ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.x3ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.x4ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
             this.menuStrip1.SuspendLayout();
             this.SuspendLayout();
@@ -57,10 +66,11 @@ namespace Fami.UI
             // menuStrip1
             // 
             this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.fileToolStripMenuItem});
+            this.fileToolStripMenuItem,
+            this.optionsToolStripMenuItem});
             this.menuStrip1.Location = new System.Drawing.Point(0, 0);
             this.menuStrip1.Name = "menuStrip1";
-            this.menuStrip1.Size = new System.Drawing.Size(800, 24);
+            this.menuStrip1.Size = new System.Drawing.Size(575, 24);
             this.menuStrip1.TabIndex = 0;
             this.menuStrip1.Text = "menuStrip1";
             // 
@@ -201,12 +211,78 @@ namespace Fami.UI
             this.exitToolStripMenuItem.Text = "E&xit";
             this.exitToolStripMenuItem.Click += new System.EventHandler(this.exitToolStripMenuItem_Click);
             // 
+            // optionsToolStripMenuItem
+            // 
+            this.optionsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.controllersToolStripMenuItem,
+            this.windowSizeToolStripMenuItem});
+            this.optionsToolStripMenuItem.Name = "optionsToolStripMenuItem";
+            this.optionsToolStripMenuItem.Size = new System.Drawing.Size(61, 20);
+            this.optionsToolStripMenuItem.Text = "Options";
+            // 
+            // controllersToolStripMenuItem
+            // 
+            this.controllersToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.keyboardToolStripMenuItem,
+            this.gamepadToolStripMenuItem});
+            this.controllersToolStripMenuItem.Name = "controllersToolStripMenuItem";
+            this.controllersToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.controllersToolStripMenuItem.Text = "Controllers";
+            // 
+            // keyboardToolStripMenuItem
+            // 
+            this.keyboardToolStripMenuItem.Name = "keyboardToolStripMenuItem";
+            this.keyboardToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.keyboardToolStripMenuItem.Text = "Keyboard";
+            this.keyboardToolStripMenuItem.Click += new System.EventHandler(this.keyboardToolStripMenuItem_Click);
+            // 
+            // gamepadToolStripMenuItem
+            // 
+            this.gamepadToolStripMenuItem.Name = "gamepadToolStripMenuItem";
+            this.gamepadToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.gamepadToolStripMenuItem.Text = "Gamepad";
+            // 
+            // windowSizeToolStripMenuItem
+            // 
+            this.windowSizeToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.x1ToolStripMenuItem,
+            this.x2ToolStripMenuItem,
+            this.x3ToolStripMenuItem,
+            this.x4ToolStripMenuItem});
+            this.windowSizeToolStripMenuItem.Name = "windowSizeToolStripMenuItem";
+            this.windowSizeToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            this.windowSizeToolStripMenuItem.Text = "Window Size";
+            // 
+            // x1ToolStripMenuItem
+            // 
+            this.x1ToolStripMenuItem.Name = "x1ToolStripMenuItem";
+            this.x1ToolStripMenuItem.Size = new System.Drawing.Size(86, 22);
+            this.x1ToolStripMenuItem.Text = "x1";
+            // 
+            // x2ToolStripMenuItem
+            // 
+            this.x2ToolStripMenuItem.Name = "x2ToolStripMenuItem";
+            this.x2ToolStripMenuItem.Size = new System.Drawing.Size(86, 22);
+            this.x2ToolStripMenuItem.Text = "x2";
+            // 
+            // x3ToolStripMenuItem
+            // 
+            this.x3ToolStripMenuItem.Name = "x3ToolStripMenuItem";
+            this.x3ToolStripMenuItem.Size = new System.Drawing.Size(86, 22);
+            this.x3ToolStripMenuItem.Text = "x3";
+            // 
+            // x4ToolStripMenuItem
+            // 
+            this.x4ToolStripMenuItem.Name = "x4ToolStripMenuItem";
+            this.x4ToolStripMenuItem.Size = new System.Drawing.Size(86, 22);
+            this.x4ToolStripMenuItem.Text = "x4";
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.SystemColors.ControlDark;
-            this.ClientSize = new System.Drawing.Size(800, 450);
+            this.ClientSize = new System.Drawing.Size(575, 535);
             this.Controls.Add(this.menuStrip1);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MainMenuStrip = this.menuStrip1;
@@ -243,6 +319,15 @@ namespace Fami.UI
         private System.Windows.Forms.ToolStripMenuItem recentToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem2;
         private System.Windows.Forms.ToolStripMenuItem exitToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem optionsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem controllersToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem keyboardToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem gamepadToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem windowSizeToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem x1ToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem x2ToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem x3ToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem x4ToolStripMenuItem;
     }
 }
 

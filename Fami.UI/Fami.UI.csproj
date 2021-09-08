@@ -8,4 +8,8 @@
     <StartupObject />
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Fami.Core\Fami.Core.csproj" />
+  </ItemGroup>
+
 </Project>
