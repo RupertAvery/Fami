@@ -1367,7 +1367,7 @@ namespace Fami.Core
                 }
             }
 
-            if (cycle > 0 && cycle < 256 && scanline > 0 && scanline < 240)
+            if (cycle > 0 && cycle <= 256 && scanline > 0 && scanline < 240)
             {
                 if ((cycle <= 8 && ppu_mask.RenderBackgroundLeft == 0))
                 {
