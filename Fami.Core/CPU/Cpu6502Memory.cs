@@ -1,4 +1,4 @@
-﻿namespace Fami.Core
+﻿namespace Fami.Core.CPU
 {
     public class Cpu6502Memory
     {

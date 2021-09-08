@@ -1,8 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,8 +12,6 @@ using Fami.Core.Interface.Input;
 
 namespace Fami.UI
 {
-
-
     public partial class MainForm : Form, IMainInterface
     {
         private readonly Main _main;
@@ -24,14 +22,36 @@ namespace Fami.UI
         public Action SaveState { get; set; }
         public Action<int,int> ResizeWindow { get; set; }
         public Action<ControllerButtonEnum> SetMapping { get; set; }
+        public Configuration Configuration { get;set;}
 
         public MainForm(Main main)
         {
             _main = main;
+            _main.StateChanged = StateChanged;
             SizeChanged += (sender, args) => OnHostResize?.Invoke();
             InitializeComponent();
+            Configuration = new Configuration();
         }
-        
+
+        private void StateChanged(int slot)
+        {
+            UncheckSlots();
+            switch (slot)
+            {
+                case 1: slot1ToolStripMenuItem.Checked = true; break;
+                case 2: slot2ToolStripMenuItem.Checked = true; break;
+                case 3: slot3ToolStripMenuItem.Checked = true; break;
+                case 4: slot4ToolStripMenuItem.Checked = true; break;
+                case 5: slot5ToolStripMenuItem.Checked = true; break;
+                case 6: slot6ToolStripMenuItem.Checked = true; break;
+                case 7: slot7ToolStripMenuItem.Checked = true; break;
+                case 8: slot8ToolStripMenuItem.Checked = true; break;
+                case 9: slot9ToolStripMenuItem.Checked = true; break;
+                case 10: slot10ToolStripMenuItem.Checked = true; break;
+
+            }
+        }
+
         private void MainForm_Load(object sender, EventArgs e)
         {
             SetSize(4);
@@ -70,6 +90,27 @@ namespace Fami.UI
             Close();
         }
 
+        private const int MaxRecentItems = 10;
+
+        private void AddRecentItem(string item)
+        {
+            if (!Configuration.RecentItems.Contains(item))
+            {
+                Configuration.RecentItems.Add(item);
+                var recentItem = new ToolStripMenuItem(Path.GetFileName(item));
+                recentItem.Click += (sender, args) =>
+                {
+                    LoadRom.Invoke(item);
+                };
+                recentToolStripMenuItem.DropDownItems.Insert(0, recentItem);
+              
+                if (recentToolStripMenuItem.DropDownItems.Count > MaxRecentItems + 1)
+                {
+                    recentToolStripMenuItem.DropDownItems.RemoveAt(MaxRecentItems);
+                }
+            }
+        }
+
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
         {
             openFileDialog1.Filter = "All supported files|*.nes;*.zip|All files|*.*";
@@ -80,6 +121,7 @@ namespace Fami.UI
                 {
                     if (LoadRom.Invoke(openFileDialog1.FileName))
                     {
+                        AddRecentItem(openFileDialog1.FileName);
                         SetMenus(true);
                     }
                 }
@@ -115,10 +157,24 @@ namespace Fami.UI
             saveStateToolStripMenuItem.Enabled = enabled;
         }
 
-        private void keyboardToolStripMenuItem_Click(object sender, EventArgs e)
+        private void controllersToolStripMenuItem_Click(object sender, EventArgs e)
         {
             var mapper = new MappingForm(_main);
             mapper.Show(this);
+        }
+
+        private void clearItemsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Configuration.RecentItems.Clear();
+            while (recentToolStripMenuItem.DropDownItems.Count > 1)
+            {
+                recentToolStripMenuItem.DropDownItems.RemoveAt(recentToolStripMenuItem.DropDownItems.Count - 2);
+            }
+        }
+
+        private void MainForm_Paint(object sender, PaintEventArgs e)
+        {
+            _main.Redraw();
         }
     }
 }

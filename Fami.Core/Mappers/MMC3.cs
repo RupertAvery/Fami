@@ -1,4 +1,5 @@
 ﻿using System.IO;
+using Fami.Core.CPU;
 
 namespace Fami.Core.Mappers
 {

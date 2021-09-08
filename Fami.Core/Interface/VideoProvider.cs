@@ -25,8 +25,10 @@ namespace Fami.Core.Interface
         {
             Window = window;
             _displayBuf = new uint[WIDTH * HEIGHT];
-            string fontsfolder = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
-            _font = TTF_OpenFont(Path.Combine(fontsfolder, "ARIAL.TTF"), 12);
+            _font = TTF_OpenFont(Path.Combine("Fonts", "Modeseven.ttf"), 24);
+
+            //string fontsfolder = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+            //_font = TTF_OpenFont(Path.Combine(fontsfolder, "LUCON.TTF"), 24);
 
         }
 
@@ -37,6 +39,9 @@ namespace Fami.Core.Interface
         public int Y { get; private set; }
         public int Width { get; private set; }
         public int Height { get; private set; }
+
+        public int TextWidth { get; private set; }
+        public int TextHeight { get; private set; }
 
         public int CanvasWidth { get; private set; }
         public int CanvasHeight { get; private set; }
@@ -165,7 +170,7 @@ namespace Fami.Core.Interface
 
             if (_messageTimeout > 0)
             {
-                SDL_Rect textLocation = new SDL_Rect() { x = 0, y = dest.h - 24, h = 24, w = WIDTH };
+                SDL_Rect textLocation = new SDL_Rect() { x = 0, y = dest.h - TextHeight, h = TextHeight, w = TextWidth };
                 if (_messageTimeout < 50)
                 {
                     SDL_SetTextureAlphaMod(textTexture, (byte)(((_messageTimeout) / 50f) * 255));
@@ -215,6 +220,9 @@ namespace Fami.Core.Interface
 
             textSurface = TTF_RenderText_Blended(_font, _message, foregroundColor);
             textTexture = SDL_CreateTextureFromSurface(_renderer, textSurface);
+            SDL_QueryTexture(textTexture, out uint format, out int access, out int width, out int height);
+            TextHeight = height;
+            TextWidth = width;
             SDL_SetTextureAlphaMod(textTexture, 255);
         }
 

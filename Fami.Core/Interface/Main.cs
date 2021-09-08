@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using Fami.Core.CPU;
 using Fami.Core.Interface.Input;
 using static SDL2.SDL;
 
@@ -37,6 +38,7 @@ namespace Fami.Core.Interface
         private uint _frames;
         private bool _hasState;
 
+        public Action<int> StateChanged { get; set; }
         private AudioProvider _audioProvider;
         private VideoProvider _videoProvider;
 
@@ -105,7 +107,11 @@ namespace Fami.Core.Interface
                 _videoProvider.Clear();
             };
 
-            form.ChangeSlot = i => _stateSlot = i;
+            form.ChangeSlot = i =>
+            {
+                _stateSlot = i;
+                _videoProvider.SetMessage($"Slot #{_stateSlot}");
+            };
 
             form.SaveState = SaveState;
             form.LoadState = LoadState;
@@ -160,6 +166,8 @@ namespace Fami.Core.Interface
             _videoProvider.Initialize();
             _videoProvider.Clear();
             _audioProvider.Initialize();
+
+            form.ChangeSlot(1);
         }
 
         private bool _justLoaded;
@@ -488,7 +496,7 @@ namespace Fami.Core.Interface
                         // Use Math.Floor to truncate to 2 decimal places
                         _fps = Math.Floor((frames / diff) * 100) / 100;
                         //Mips = Math.Floor((mips / diff) * 100) / 100;
-                        UpdateTitle();
+                        // UpdateTitle();
                         //Seconds++;
 
                         fpsEvalTimer += 1;
@@ -519,58 +527,52 @@ namespace Fami.Core.Interface
                 {
                     switch (evtKey.keysym.sym)
                     {
-                        //case SDL_Keycode.SDLK_UP:
-                        //    _controller1State &= ~0x08U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_DOWN:
-                        //    _controller1State &= ~0x04U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_LEFT:
-                        //    _controller1State &= ~0x02U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_RIGHT:
-                        //    _controller1State &= ~0x01U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_RETURN:
-                        //    _controller1State &= ~0x10U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_LSHIFT:
-                        //case SDL_Keycode.SDLK_RSHIFT:
-                        //    _controller1State &= ~0x20U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_z:
-                        //    _controller1State &= ~0x80U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_x:
-                        //    _controller1State &= ~0x40U;
-                        //    break;
                         case SDL_Keycode.SDLK_r:
                             _resetPending = true;
+                            _videoProvider.SetMessage("Reset");
                             break;
+
                         case SDL_Keycode.SDLK_BACKSLASH:
                             _fastForward = true;
+                            _videoProvider.SetMessage("Fast Forward");
                             break;
+                        
                         case SDL_Keycode.SDLK_F2:
                             _saveStatePending = true;
                             break;
+                        
                         case SDL_Keycode.SDLK_F4:
                             _loadStatePending = true;
                             break;
+                        
+                        case { } keyCode when keyCode >= SDL_Keycode.SDLK_0 && keyCode <= SDL_Keycode.SDLK_9:
+                            if (keyCode == SDL_Keycode.SDLK_0)
+                            {
+                                _stateSlot = 10;
+                            }
+                            else
+                            {
+                                _stateSlot = keyCode - SDL_Keycode.SDLK_0;
+                            }
+                            _videoProvider.SetMessage($"Slot #{_stateSlot}");
+                            StateChanged?.Invoke(_stateSlot);
+                            break;
+                            
                         case SDL_Keycode.SDLK_p:
                             _paused = !_paused;
-                            Console.WriteLine(_paused ? "Paused" : "Resumed");
+                            _videoProvider.SetMessage(_paused ? "Paused" : "Resumed");
                             break;
                         case SDL_Keycode.SDLK_f:
                             if (_paused)
                             {
-                                Console.WriteLine("Frame Advanced");
+                                _videoProvider.SetMessage("Frame Advanced");
                                 _frameAdvance = true;
                             }
                             break;
                         case SDL_Keycode.SDLK_BACKSPACE:
                             if (!_rewind)
                             {
-                                Console.WriteLine("Rewinding...");
+                                _videoProvider.SetMessage("Rewinding...");
                                 _rewind = true;
                                 if (_paused)
                                 {
@@ -588,31 +590,6 @@ namespace Fami.Core.Interface
                 {
                     switch (evtKey.keysym.sym)
                     {
-                        //case SDL_Keycode.SDLK_UP:
-                        //    _controller1State &= ~0x08U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_DOWN:
-                        //    _controller1State &= ~0x04U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_LEFT:
-                        //    _controller1State &= ~0x02U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_RIGHT:
-                        //    _controller1State &= ~0x01U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_RETURN:
-                        //    _controller1State &= ~0x10U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_LSHIFT:
-                        //case SDL_Keycode.SDLK_RSHIFT:
-                        //    _controller1State &= ~0x20U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_z:
-                        //    _controller1State &= ~0x80U;
-                        //    break;
-                        //case SDL_Keycode.SDLK_x:
-                        //    _controller1State &= ~0x40U;
-                        //    break;
                         case SDL_Keycode.SDLK_BACKSLASH:
                             _fastForward = false;
                             break;
@@ -644,5 +621,12 @@ namespace Fami.Core.Interface
             SDL_Quit();
         }
 
+        public void Redraw()
+        {
+            if (_emulationThread == null)
+            {
+                _videoProvider.Clear();
+            }
+        }
     }
 }

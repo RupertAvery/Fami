@@ -38,6 +38,16 @@ namespace Fami.UI
 
         private void MappingForm_Load(object sender, EventArgs e)
         {
+            GetMapping(ControllerButtonEnum.Up, textBoxUp);
+            GetMapping(ControllerButtonEnum.Down, textBoxDown);
+            GetMapping(ControllerButtonEnum.Left, textBoxLeft);
+            GetMapping(ControllerButtonEnum.Right, textBoxRight);
+            GetMapping(ControllerButtonEnum.B, textBoxB);
+            GetMapping(ControllerButtonEnum.A, textBoxA);
+            GetMapping(ControllerButtonEnum.Select, textBoxSelect);
+            GetMapping(ControllerButtonEnum.Start, textBoxStart);
+
+
             buttonUp.Click += (o, e) => { ShowMapping(ControllerButtonEnum.Up); GetMapping(ControllerButtonEnum.Up, textBoxUp); };
             buttonDown.Click += (o, e) => { ShowMapping(ControllerButtonEnum.Down); GetMapping(ControllerButtonEnum.Down, textBoxDown); };
             buttonLeft.Click += (o, e) => { ShowMapping(ControllerButtonEnum.Left); GetMapping(ControllerButtonEnum.Left, textBoxLeft); };

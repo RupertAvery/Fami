@@ -1,6 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 
-namespace Fami.Core
+namespace Fami.Core.CPU
 {
     public partial class Cpu6502State
     {

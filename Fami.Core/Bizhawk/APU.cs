@@ -12,7 +12,7 @@
 
 using System;
 using System.Runtime.CompilerServices;
-using Fami.Core;
+using Fami.Core.CPU;
 
 namespace BizHawk.Emulation.Cores.Nintendo.NES
 {

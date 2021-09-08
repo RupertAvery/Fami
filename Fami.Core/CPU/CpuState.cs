@@ -1,4 +1,4 @@
-﻿namespace Fami.Core
+﻿namespace Fami.Core.CPU
 {
     public struct CpuState
     {

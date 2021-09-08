@@ -1,12 +1,10 @@
 ﻿using System;
 using System.IO;
 using System.Text;
-using System.Threading;
 using BizHawk.Emulation.Common;
 using BizHawk.Emulation.Cores.Nintendo.NES;
-using Fami.Core.Audio;
 
-namespace Fami.Core
+namespace Fami.Core.CPU
 {
     public partial class Cpu6502State
     {

@@ -138,7 +138,7 @@ namespace Fami.Core.Interface.Input
         }
 
 
-        private bool _mappingMode = true;
+        private bool _mappingMode = false;
         private ControllerButtonEnum _mappingTarget;
 
         public void SetMapping(ControllerButtonEnum button)

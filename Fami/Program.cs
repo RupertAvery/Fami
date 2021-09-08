@@ -15,8 +15,8 @@ namespace Fami
             {
                 using (var form = new MainForm(main))
                 {
-                    main.Initialize(form);
                     form.Show();
+                    main.Initialize(form);
                     string rom;
                     //main.Test();
                     ////main.Load(args[0]);

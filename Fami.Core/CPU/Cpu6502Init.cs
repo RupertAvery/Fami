@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Fami.Core
+namespace Fami.Core.CPU
 {
     public static partial class Cpu6502InstructionSet
     {

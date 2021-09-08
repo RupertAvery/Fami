@@ -1,11 +1,8 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using BizHawk.Emulation.Cores.Nintendo.NES;
-using Fami.Core.Audio;
 
-namespace Fami.Core
+namespace Fami.Core.CPU
 {
     public enum InterruptTypeEnum
     {
