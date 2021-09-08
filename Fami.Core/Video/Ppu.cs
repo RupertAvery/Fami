@@ -391,6 +391,13 @@ namespace Fami.Core
             ppu_data_buffer = 0;
             oam_addr = 0;
             scanline = -1;
+
+            ppu_status.Register = 0;
+            ppu_control.Register = 0;
+            ppu_mask.Register = 0;
+            vram_addr.Register = 0;
+            tram_addr.Register = 0;
+
         }
 
         public void LoadCartridge(Cartridge cart)
