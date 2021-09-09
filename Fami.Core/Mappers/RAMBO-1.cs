@@ -40,7 +40,8 @@ namespace Fami.Core.Mappers
             }
             if (enable_interrupts && irq_counter == 0)
             {
-                // TODO: 
+                // TODO: implement scanline mode vs CPU cycle mode
+                // Delay triggering by 4 CPU cycles?
                 _cartridge.Cpu.TriggerInterrupt(InterruptTypeEnum.IRQ);
             }
         }
