@@ -6,6 +6,17 @@ The main goal was to build a fast NES emulator with sound in C#.
 
 When running in Debug mode, the emulator manages around 40-50 fps, but runs full speed when running in Release mode on a Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz.
 
+# Screenshots
+
+![image](https://user-images.githubusercontent.com/1910659/132545071-78baf290-197d-4dd0-b9b5-a9d4fb778295.png)
+
+![image](https://user-images.githubusercontent.com/1910659/132545227-e33430e0-f5b6-483b-b72a-4693ef096053.png)
+
+![image](https://user-images.githubusercontent.com/1910659/132545346-a13d6b1e-859b-49eb-88da-f3ea6cb9ce98.png)
+
+![image](https://user-images.githubusercontent.com/1910659/132545470-067b202f-ff32-473e-9d10-f5c6e52aa412.png)
+
+
 # Prerequisites
 
 * .NET 5 SDK
