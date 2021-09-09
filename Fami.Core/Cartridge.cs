@@ -72,15 +72,8 @@ namespace Fami.Core
 
             Console.WriteLine($"Mapper {mapperId}");
 
-            h.Mapper = mapperId switch
-            {
-                0 => new NROM(h),
-                1 => new MMC1(h),
-                2 => new UxROM(h),
-                4 => new MMC3(h),
-                7 => new AxROM(h),
-                _ => throw new UnsupportedMapperException(mapperId)
-            };
+            h.Mapper = MapperProvider.Resolve(h, mapperId);
+
             return h;
         }
 

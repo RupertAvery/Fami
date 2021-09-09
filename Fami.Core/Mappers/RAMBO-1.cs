@@ -3,9 +3,10 @@ using Fami.Core.CPU;
 
 namespace Fami.Core.Mappers
 {
-    public class MMC3 : BaseMapper
+    public class RAMBO1 : BaseMapper
     {
         private byte _bankRegisterSelect;
+        private byte _kSelect;
         private byte _chrSelect;
         private byte _prgSelect;
 
@@ -16,14 +17,14 @@ namespace Fami.Core.Mappers
         private bool enable_sram;
         private bool enable_write_protect;
 
-        private byte[] _bankRegister = new byte[8];
+        private byte[] _bankRegister = new byte[16];
         protected uint[] _chrBankOffsets = new uint[8];
         protected uint[] _prgBankOffsets;
 
-        public MMC3(Cartridge cartridge) : base(cartridge)
+        public RAMBO1(Cartridge cartridge) : base(cartridge)
         {
             cartridge.Cpu.Ppu.ScanLineHandler = ScanLineHandler;
-            _prgBankOffsets = new uint[] { 0, 0x2000, _lastBankOffset, _lastBankOffset + 0x2000 };
+            _prgBankOffsets = new uint[] { 0, 0, 0, _lastBankOffset + 0x2000 };
         }
 
         public void ScanLineHandler()
@@ -39,6 +40,7 @@ namespace Fami.Core.Mappers
             }
             if (enable_interrupts && irq_counter == 0)
             {
+                // TODO: 
                 _cartridge.Cpu.TriggerInterrupt(InterruptTypeEnum.IRQ);
             }
         }
@@ -66,11 +68,11 @@ namespace Fami.Core.Mappers
 
             if (address >= 0x6000 && address < 0x8000)
             {
-                if (enable_sram)
-                {
-                    _cartridge.RamBankData[address - 0x6000] = (byte)value;
-                    return true;
-                }
+                //if (enable_sram)
+                //{
+                //    _cartridge.RamBankData[address - 0x6000] = (byte)value;
+                //    return true;
+                //}
                 return false;
             }
             else if (address >= 0x8000 && address <= 0x9FFF)
@@ -78,7 +80,8 @@ namespace Fami.Core.Mappers
                 if (even)
                 {
                     // Bank Select
-                    _bankRegisterSelect = (byte)(value & 7);
+                    _bankRegisterSelect = (byte)(value & 0xF);
+                    _kSelect = (byte)((value >> 5) & 1);
                     _prgSelect = (byte)((value >> 6) & 1);
                     _chrSelect = (byte)((value >> 7) & 1);
                 }
@@ -96,8 +99,8 @@ namespace Fami.Core.Mappers
                     _cartridge.Mirror = (value & 1) == 1 ? MirrorEnum.Horizontal : MirrorEnum.Vertical;
                 else
                 {
-                    enable_sram = (value & 0x80) == 0x80;
-                    enable_write_protect = (value & 0x40) == 0x40;
+                    //enable_sram = (value & 0x80) == 0x80;
+                    //enable_write_protect = (value & 0x40) == 0x40;
                 }
                 return true;
             }
@@ -194,77 +197,46 @@ namespace Fami.Core.Mappers
             switch (_prgSelect)
             {
                 case 0:
-                    // $8000-$9FFF
-                    _prgBankOffsets[0] = _bankRegister[6] * 0x2000U; // R6
-                    // $A000-$BFFF
-                    _prgBankOffsets[1] = _bankRegister[7] * 0x2000U; // R7
-                    // $C000-$DFFF
-                    _prgBankOffsets[2] = _lastBankOffset; // -2
-                    // $E000-$FFFF
-                    _prgBankOffsets[3] = _lastBankOffset + 0x2000; // -1
+                    _prgBankOffsets[0] = _bankRegister[0x6] * 0x2000U; // R6
+                    _prgBankOffsets[1] = _bankRegister[0x7] * 0x2000U; // R7
+                    _prgBankOffsets[2] = _bankRegister[0xF] * 0x2000U; // RF
+                    _prgBankOffsets[3] = _lastBankOffset + 0x2000;
                     break;
                 case 1:
-                    // $8000-$9FFF
-                    _prgBankOffsets[0] = _lastBankOffset; // -2
-                    // $C000-$DFFF
-                    _prgBankOffsets[1] = _bankRegister[7] * 0x2000U;  // R7
-                    // $E000-$FFFF
-                    _prgBankOffsets[2] = _bankRegister[6] * 0x2000U;  // R6
-                    // $E000-$FFFF
-                    _prgBankOffsets[3] = _lastBankOffset + 0x2000; // -1
+                    _prgBankOffsets[0] = _bankRegister[0xF] * 0x2000U; // RF
+                    _prgBankOffsets[1] = _bankRegister[0x7] * 0x2000U; // R7
+                    _prgBankOffsets[2] = _bankRegister[0x6] * 0x2000U; // R6
+                    _prgBankOffsets[3] = _lastBankOffset + 0x2000;
                     break;
             }
-
-            //(-1) : the last bank
-            //(-2) : the second last bank
 
             switch (_chrSelect)
             {
                 case 0:
-                    // 2 KB switchable CHR bank
-                    // $0000-$03FF
-                    _chrBankOffsets[0] = _bankRegister[0] & 0xFEU; // R0
-                    // $0400-$07FF
-                    _chrBankOffsets[1] = _bankRegister[0] | 0x01U; // R0
-
-                    // 2 KB switchable CHR bank
-                    // $0800-$0BFF
-                    _chrBankOffsets[2] = _bankRegister[1] & 0xFEU; // R1
-                    // $0C00-$0FFF
-                    _chrBankOffsets[3] = _bankRegister[1] | 0x01U; // R1
-
-                    // 1 KB switchable CHR bank
-                    // $1000-$13FF
-                    _chrBankOffsets[4] = _bankRegister[2]; // R2
-
-                    // 1 KB switchable CHR bank
-                    // $1400-$17FF
-                    _chrBankOffsets[5] = _bankRegister[3]; // R3
-
-                    // 1 KB switchable CHR bank
-                    // $1800-$1BFF
-                    _chrBankOffsets[6] = _bankRegister[4]; // R4
-
-                    // 1 KB switchable CHR bank
-                    // $1C00-$1FFF
-                    _chrBankOffsets[7] = _bankRegister[5]; // R5
+                    _chrBankOffsets[0] = _bankRegister[0] & 0xFEU;
+                    _chrBankOffsets[1] = (_kSelect == 0 ? _bankRegister[0] & 0xFEU : _bankRegister[8]);
+                    _chrBankOffsets[2] = _bankRegister[1] & 0xFEU;
+                    _chrBankOffsets[3] = (_kSelect == 0 ? _bankRegister[1] & 0xFEU : _bankRegister[9]) ;
+                    _chrBankOffsets[4] = _bankRegister[2];
+                    _chrBankOffsets[5] = _bankRegister[3];
+                    _chrBankOffsets[6] = _bankRegister[4];
+                    _chrBankOffsets[7] = _bankRegister[5];
                     break;
                 case 1:
-                    _chrBankOffsets[0] = _bankRegister[2];  // R2
-                    _chrBankOffsets[1] = _bankRegister[3];  // R3
-                    _chrBankOffsets[2] = _bankRegister[4];  // R4
-                    _chrBankOffsets[3] = _bankRegister[5];  // R5
-                    _chrBankOffsets[4] = _bankRegister[0] & 0xFEU;  // R0
-                    _chrBankOffsets[5] = _bankRegister[0] | 0x01U;  // R0
-                    _chrBankOffsets[6] = _bankRegister[1] & 0xFEU;  // R1
-                    _chrBankOffsets[7] = _bankRegister[1] | 0x01U;  // R1
+                    _chrBankOffsets[0] = _bankRegister[2];
+                    _chrBankOffsets[1] = _bankRegister[3];
+                    _chrBankOffsets[2] = _bankRegister[4];
+                    _chrBankOffsets[3] = _bankRegister[5];
+                    _chrBankOffsets[4] = _bankRegister[0] & 0xFEU;
+                    _chrBankOffsets[5] = (_kSelect == 0 ? _bankRegister[0] & 0xFEU : _bankRegister[8]);
+                    _chrBankOffsets[6] = _bankRegister[1] & 0xFEU;
+                    _chrBankOffsets[7] = (_kSelect == 0 ? _bankRegister[1] & 0xFEU : _bankRegister[9]);
                     break;
             }
 
             for (int i = 0; i < _prgBankOffsets.Length; i++)
                 _prgBankOffsets[i] %= (uint)_cartridge.RomBankData.Length;
 
-            // convert into 1024 (1K) offsets 
             for (int i = 0; i < _chrBankOffsets.Length; i++)
                 _chrBankOffsets[i] = (uint)(_chrBankOffsets[i] * 0x400 % _cartridge.VRomBankData.Length);
         }
