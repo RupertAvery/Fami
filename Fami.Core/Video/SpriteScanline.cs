@@ -1,4 +1,4 @@
-﻿namespace Fami.Core
+﻿namespace Fami.Core.Video
 {
     public struct SpriteScanline
     {

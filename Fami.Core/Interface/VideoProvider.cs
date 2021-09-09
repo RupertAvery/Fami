@@ -212,18 +212,21 @@ namespace Fami.Core.Interface
 
         public void SetMessage(string message)
         {
-            _message = message;
-            _messageTimeout = 200;
+            if (textSurface == IntPtr.Zero)
+            {
+                _message = message;
+                _messageTimeout = 200;
 
-            SDL_Color foregroundColor = new SDL_Color() { a = 0xFF, r = 0xFF, g = 0xFF, b = 0xFF };
-            SDL_Color backgroundColor = new SDL_Color() { a = 0x00, r = 0x00, g = 0x00, b = 0x00 };
+                SDL_Color foregroundColor = new SDL_Color() {a = 0xFF, r = 0xFF, g = 0xFF, b = 0xFF};
+                SDL_Color backgroundColor = new SDL_Color() {a = 0x00, r = 0x00, g = 0x00, b = 0x00};
 
-            textSurface = TTF_RenderText_Blended(_font, _message, foregroundColor);
-            textTexture = SDL_CreateTextureFromSurface(_renderer, textSurface);
-            SDL_QueryTexture(textTexture, out uint format, out int access, out int width, out int height);
-            TextHeight = height;
-            TextWidth = width;
-            SDL_SetTextureAlphaMod(textTexture, 255);
+                textSurface = TTF_RenderText_Blended(_font, _message, foregroundColor);
+                textTexture = SDL_CreateTextureFromSurface(_renderer, textSurface);
+                SDL_QueryTexture(textTexture, out uint format, out int access, out int width, out int height);
+                TextHeight = height;
+                TextWidth = width;
+                SDL_SetTextureAlphaMod(textTexture, 255);
+            }
         }
 
 

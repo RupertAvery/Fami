@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Runtime.CompilerServices;
 using BizHawk.Emulation.Cores.Nintendo.NES;
+using Fami.Core.Video;
 
 namespace Fami.Core.CPU
 {

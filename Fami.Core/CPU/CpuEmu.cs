@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using BizHawk.Emulation.Common;
 using BizHawk.Emulation.Cores.Nintendo.NES;
+using Fami.Core.Video;
 
 namespace Fami.Core.CPU
 {
