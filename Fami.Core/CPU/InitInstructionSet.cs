@@ -4,19 +4,19 @@ namespace Fami.Core.CPU
 {
     public static partial class Cpu6502InstructionSet
     {
-        public static Cpu6502Execute[] OpCodes;
+        public static OpCodeDelegate[] OpCodes;
 
-        public static void InitCpu()
+        public static void InitOpcodeTable()
         {
-            OpCodes = new Cpu6502Execute[256];
+            OpCodes = new OpCodeDelegate[256];
 
-            for (var i = 0; i < 256; i++)
+            for (var opCode = 0; opCode < 256; opCode++)
             {
-                OpCodes[i] = GetInstructionExecute(i);
+                OpCodes[opCode] = GetOpcodeDelegate(opCode);
             }
         }
 
-        private static Cpu6502Execute GetInstructionExecute(int i)
+        private static OpCodeDelegate GetOpcodeDelegate(int i)
         {
             return i switch
             {

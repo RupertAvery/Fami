@@ -12,7 +12,7 @@ namespace Fami.Core.CPU
         BRK
     }
 
-    public partial class Cpu6502State
+    public partial class MC6502State
     {
         public byte[] RAM = new byte[0x800];
         public uint A;
@@ -172,7 +172,6 @@ namespace Fami.Core.CPU
             return data;
         }
 
-
         public void BusWrite(uint address, uint value)
         {
             var handled = Cartridge.CpuWrite(address, value);
@@ -188,7 +187,7 @@ namespace Fami.Core.CPU
             {
                 Ppu.Write(address, value);
             }
-            else if ((address >= 0x4000 && address <= 0x4013) || address == 0x4015 || address == 0x4017)
+            else if ((address >= 0x4000 && address <= 0x4013) || address == 0x4015)
             {
                 Apu.WriteReg((int)address, (byte)value);
             }
@@ -208,6 +207,10 @@ namespace Fami.Core.CPU
             else if (address >= 0x4016 && address <= 0x4017)
             {
                 ControllerRegister[address & 0x1] = Controller[address & 01];
+                if (address == 0x4017)
+                {
+                    Apu.WriteReg((int)address, (byte)(value & 0xC0));
+                }
             }
         }
 

@@ -7,21 +7,12 @@ using Fami.Core.Video;
 
 namespace Fami.Core.CPU
 {
-    public partial class Cpu6502State
+    public partial class MC6502State
     {
-        //private bool running;
-        private StringBuilder log;
         private BlipBuffer blip = new BlipBuffer(4096);
         private const int blipbuffsize = 4096;
         private const int cpuclockrate = 1789773; // NTSC
         private int old_s;
-        private int _instructionCyclesLeft;
-        private bool Debug { get; set; }
-
-        public Cpu6502State()
-        {
-            log = new StringBuilder();
-        }
 
         public void GetSamplesSync(out short[] samples, out int nsamp)
         {
@@ -93,11 +84,27 @@ namespace Fami.Core.CPU
             Apu.sampleclock = 0;
         }
 
+
+    }
+
+
+    public partial class MC6502State
+    {
+        //private bool running;
+        private StringBuilder log;
+        private int _instructionCyclesLeft;
+        private bool Debug { get; set; }
+
+        public MC6502State()
+        {
+            log = new StringBuilder();
+        }
+
         public void Init()
         {
             Ppu = new Ppu(this);
             Apu = new APU(this, null, false);
-            Cpu6502InstructionSet.InitCpu();
+            MC6502InstructionSet.InitOpcodeTable();
 
             blip.SetRates((uint)cpuclockrate, 44100);
         }
@@ -108,12 +115,9 @@ namespace Fami.Core.CPU
             Ppu.LoadCartridge(cart);
         }
 
-
         public uint Step()
         {
             Ppu.Clock();
-
-
 
             if (Ppu.cycles % 3 == 0)
             {
@@ -161,8 +165,6 @@ namespace Fami.Core.CPU
                     }
 
                     Apu.sampleclock++;
-
-
                 }
             }
 
@@ -207,8 +209,6 @@ namespace Fami.Core.CPU
                 Console.WriteLine(e);
                 File.WriteAllText("fami.log", log.ToString());
             }
-
-
         }
 
         /// <summary>
@@ -233,7 +233,7 @@ namespace Fami.Core.CPU
             }
 
             var ins = BusRead(PC);
-            var bytes = Cpu6502InstructionSet.bytes[ins];
+            var bytes = MC6502InstructionSet.bytes[ins];
 
             if (Debug)
             {
@@ -241,24 +241,24 @@ namespace Fami.Core.CPU
             }
 
             // This could be moved into each instruction, but we would need to implement all 255 instructions separately
-            switch (Cpu6502InstructionSet.addrmodes[ins])
+            switch (MC6502InstructionSet.addrmodes[ins])
             {
-                case Cpu6502InstructionSet.ACC:
-                case Cpu6502InstructionSet.IMP:
+                case MC6502InstructionSet.ACC:
+                case MC6502InstructionSet.IMP:
                     break;
-                case Cpu6502InstructionSet.IMM:
+                case MC6502InstructionSet.IMM:
                     AddrModeImmediate();
                     break;
-                case Cpu6502InstructionSet.DP_:
+                case MC6502InstructionSet.DP_:
                     AddrModeZeroPage();
                     break;
-                case Cpu6502InstructionSet.DPX:
+                case MC6502InstructionSet.DPX:
                     AddrModeZeroPageX();
                     break;
-                case Cpu6502InstructionSet.DPY:
+                case MC6502InstructionSet.DPY:
                     AddrModeZeroPageY();
                     break;
-                case Cpu6502InstructionSet.IND:
+                case MC6502InstructionSet.IND:
                     if (ins == 0x6c)
                     {
                         AddrModeIndirect_JMP();
@@ -268,22 +268,22 @@ namespace Fami.Core.CPU
                         AddrModeIndirect();
                     }
                     break;
-                case Cpu6502InstructionSet.IDX:
+                case MC6502InstructionSet.IDX:
                     AddrModeIndirectX();
                     break;
-                case Cpu6502InstructionSet.IDY:
+                case MC6502InstructionSet.IDY:
                     AddrModeIndirectY();
                     break;
-                case Cpu6502InstructionSet.ABS:
+                case MC6502InstructionSet.ABS:
                     AddrModeAbsolute();
                     break;
-                case Cpu6502InstructionSet.ABX:
+                case MC6502InstructionSet.ABX:
                     AddrModeAbsoluteX();
                     break;
-                case Cpu6502InstructionSet.ABY:
+                case MC6502InstructionSet.ABY:
                     AddrModeAbsoluteY();
                     break;
-                case Cpu6502InstructionSet.REL:
+                case MC6502InstructionSet.REL:
                     AddrModeRelative();
                     break;
                 default:
@@ -294,9 +294,9 @@ namespace Fami.Core.CPU
 
             PC += bytes;
 
-            var pcycles = Cpu6502InstructionSet.cycles[ins];
+            var pcycles = MC6502InstructionSet.cycles[ins];
 
-            pcycles += Cpu6502InstructionSet.OpCodes[ins](this);
+            pcycles += MC6502InstructionSet.OpCodes[ins](this);
 
             if (PageBoundsCrossed)
             {

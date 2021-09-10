@@ -2,41 +2,41 @@
 
 namespace Fami.Core.CPU
 {
-    public partial class Cpu6502State
+    public partial class MC6502State
     {
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeImmediate()
+        private void AddrModeImmediate()
         {
             EffectiveAddr = PC + 1;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeZeroPage()
+        private void AddrModeZeroPage()
         {
             EffectiveAddr = BusRead(PC + 1);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeZeroPageX()
+        private void AddrModeZeroPageX()
         {
             EffectiveAddr = (BusRead(PC + 1) + X) % 0x100;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeZeroPageY()
+        private void AddrModeZeroPageY()
         {
             EffectiveAddr = (BusRead(PC + 1) + Y) % 0x100;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeAbsolute()
+        private void AddrModeAbsolute()
         {
             EffectiveAddr = BusRead(PC + 1) + BusRead(PC + 2) * 0x100;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeAbsoluteX()
+        private void AddrModeAbsoluteX()
         {
             var basemem = BusRead(PC + 1) + BusRead(PC + 2) * 0x100;
             var basememPage = (basemem >> 8) & 0xff;
@@ -53,7 +53,7 @@ namespace Fami.Core.CPU
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeAbsoluteY()
+        private void AddrModeAbsoluteY()
         {
             var basemem = BusRead(PC + 1) + BusRead(PC + 2) * 0x100;
             var basememPage = (basemem >> 8) & 0xFF;
@@ -70,21 +70,21 @@ namespace Fami.Core.CPU
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeRelative()
+        private void AddrModeRelative()
         {
             EffectiveAddr = PC + 1;
         }
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeIndirect()
+        private void AddrModeIndirect()
         {
             var arg = BusRead(PC + 1) + BusRead(PC + 2) * 0x100;
             EffectiveAddr = BusRead(arg) + BusRead(arg + 1) * 0x100;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeIndirect_JMP()
+        private void AddrModeIndirect_JMP()
         {
             var arg = BusRead(PC + 1);
             arg += BusRead(PC + 2) * 0x100;
@@ -100,7 +100,7 @@ namespace Fami.Core.CPU
 
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeIndirectX()
+        private void AddrModeIndirectX()
         {
             var arg = BusRead(PC + 1);
             var ix = arg + X;
@@ -108,7 +108,7 @@ namespace Fami.Core.CPU
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AddrModeIndirectY()
+        private void AddrModeIndirectY()
         {
             var arg = BusRead(PC + 1);
             var basemem = BusRead(arg) + BusRead((arg + 1) % 0x100) * 0x100;
