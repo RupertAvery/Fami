@@ -164,54 +164,9 @@ namespace Fami.Core.CPU
                 // register, otherwise the button reads will be out of sync and corrupted
                 ControllerRegister[address & 0x0001] <<= 1;
 
-                // Zapper/Light gun logic.
-                // Currently this activates for BOTH ports, meaning 2 Light guns at the same time
-                
-                // Always pull bit 4 (sense) high, low = detected
-                data |= 0x08;
-
-                var sense = 1;
-
-                if (gun_cycle >= 0 && gun_cycle < 256 && gun_scanline >= 0 && gun_scanline < 240)
+                if (address == 0x4017)
                 {
-                    // Read the RGB values at the target area, at the time the port is accessed
-                    var pixel = Ppu.buffer[gun_cycle + gun_scanline * 256];
-                    var r = (pixel >> 16) & 0xFF;
-                    var g = (pixel >> 8) & 0xFF;
-                    var b = (pixel) & 0xFF;
-
-                    // Inverted sense (sensed = 0)
-                    sense = r > 0x10 && g > 0x10 && b > 0x10 ? 0 : 1;
-
-                }
-
-                // technically a hack. Setting this above 0 prevents the sensor from "seeing" anything.
-                // This is set during trigger to a high value, probably enough to cover an entire frame
-                if (gun_offscreen_timeout == 0)
-                {
-                    // Make sure that the sensor isn't triggered during HBlank or VBlank
-                    if (Ppu.cycle > 0 && Ppu.cycle <= 256 && Ppu.scanline > -1 && Ppu.scanline <= 240)
-                    {
-                        // We only want to pull the actual data line low when PPU is at the area of interest.
-                        // the cycle and scanline values will never actually be exactly equal(?), since cycles might not
-                        // exactly align so we're good enough with checking if we're past the point
-                        if (sense == 0 && Ppu.cycle >= gun_cycle && Ppu.scanline >= gun_scanline)
-                        {
-                            // Pull the sense bit low
-                            data &= ~((uint)0x08);
-                        }
-                    }
-                }
-                else
-                {
-                    gun_offscreen_timeout--;
-                }
-
-                if (trigger_timeout > 0)
-                {
-                    // pull the trigger bit high
-                    data |= 0x10;
-                    trigger_timeout--;
+                    CheckLightGun(ref data);
                 }
             }
             return data;

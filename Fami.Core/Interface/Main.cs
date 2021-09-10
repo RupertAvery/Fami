@@ -386,122 +386,110 @@ namespace Fami.Core.Interface
 
             while (_running)
             {
-                SDL_Event evt;
-                while (SDL_PollEvent(out evt) != 0)
+                try
                 {
-                    switch (evt.type)
+                    SDL_Event evt;
+                    while (SDL_PollEvent(out evt) != 0)
                     {
-                        case SDL_EventType.SDL_QUIT:
-                            _running = false;
-                            break;
-                        case SDL_EventType.SDL_KEYUP:
-                        case SDL_EventType.SDL_KEYDOWN:
-                            KeyEvent(evt.key);
-                            break;
-                        case SDL_EventType.SDL_CONTROLLERDEVICEADDED:
-                        case SDL_EventType.SDL_CONTROLLERDEVICEREMOVED:
-                            InputProvider.HandleDeviceEvent(evt.cdevice);
-                            break;
-                        case SDL_EventType.SDL_CONTROLLERBUTTONDOWN:
-                        case SDL_EventType.SDL_CONTROLLERBUTTONUP:
-                            InputProvider.HandleControllerEvent(evt.cbutton);
-                            break;
-                        case SDL_EventType.SDL_MOUSEMOTION:
-                            // Get the position on screen where the Zapper is pointed at
-                            (_nes.gun_cycle, _nes.gun_scanline) = _videoProvider.ToScreenCoordinates(evt.motion.x, evt.motion.y);
-                            break;
-                        case SDL_EventType.SDL_MOUSEBUTTONDOWN:
-                            // prevent the first click fron firing when loading light gun games
-                            if (_justLoaded)
-                            {
-                                _justLoaded = false;
+                        switch (evt.type)
+                        {
+                            case SDL_EventType.SDL_QUIT:
+                                _running = false;
                                 break;
-                            }
+                            case SDL_EventType.SDL_KEYUP:
+                            case SDL_EventType.SDL_KEYDOWN:
+                                KeyEvent(evt.key);
+                                break;
+                            case SDL_EventType.SDL_CONTROLLERDEVICEADDED:
+                            case SDL_EventType.SDL_CONTROLLERDEVICEREMOVED:
+                                InputProvider.HandleDeviceEvent(evt.cdevice);
+                                break;
+                            case SDL_EventType.SDL_CONTROLLERBUTTONDOWN:
+                            case SDL_EventType.SDL_CONTROLLERBUTTONUP:
+                                InputProvider.HandleControllerEvent(evt.cbutton);
+                                break;
+                            case SDL_EventType.SDL_MOUSEMOTION:
+                                // Get the position on screen where the Zapper is pointed at
+                                (_nes.gun_cycle, _nes.gun_scanline) = _videoProvider.ToScreenCoordinates(evt.motion.x, evt.motion.y);
+                                break;
+                            case SDL_EventType.SDL_MOUSEBUTTONDOWN:
+                                // prevent the first click fron firing when loading light gun games
+                                if (_justLoaded)
+                                {
+                                    _justLoaded = false;
+                                    break;
+                                }
 
-                            //Console.WriteLine($"{evt.button.button}");
+                                //Console.WriteLine($"{evt.button.button}");
 
-                            // The official Zapper has a trigger mechanism that ensures that the trigger switch is
-                            // only activated for around 100ms. This value is arbitrary and was chosen based on 
-                            // the ruder.nes test rom to have a trigger held time of 5, which is the same value as seen
-                            // in FCEUX. We decrement this value whenever we read from the controller port $4016/17
-                            _nes.trigger_timeout = 200;
+                                _nes.TriggerLightGun(evt.button.button == 3);
 
-                            // Right-click emulates pointing the Zapper away from the screen while firing
-                            if (evt.button.button == 3)
-                            {
-                                // Prevent the sensor from seeing anything for some duration.
-                                // Maybe we can bind this to a key instead?
-                                // This is an arbitrary value chosen by running the emulator in release mode
-                                // and testing Duck Hunt. Firing off-screen should select the next game mode.
-                                _nes.gun_offscreen_timeout = 4500;
-                            }
-                            break;
+                                break;
 
-                        case SDL_EventType.SDL_DROPFILE:
-                            var filename = Marshal.PtrToStringAnsi(evt.drop.file);
-                            try
-                            {
+                            case SDL_EventType.SDL_DROPFILE:
+                                var filename = Marshal.PtrToStringAnsi(evt.drop.file);
                                 LoadInternal(filename);
-                            }
-                            catch
-                            {
-                                //Log("An error occurred loading the dropped ROM file.");
-                                return;
-                            }
 
-                            break;
-                        default:
-                            //Console.WriteLine(evt.type);
-                            break;
+                                break;
+                            default:
+                                //Console.WriteLine(evt.type);
+                                break;
+                        }
                     }
+
+
+                    if (_paused)
+                    {
+                        if (_frameAdvance)
+                        {
+                            _frameAdvance = false;
+                            _threadSync.Set();
+                        }
+                    }
+                    else
+                    {
+                        double currentSec = GetTime();
+
+                        // Reset time if behind schedule
+                        if (currentSec - nextFrameAt >= NTSC_SECONDS_PER_FRAME)
+                        {
+                            double diff = currentSec - nextFrameAt;
+                            Console.WriteLine("Can't keep up! Skipping " + (int)(diff * 1000) + " milliseconds");
+                            nextFrameAt = currentSec;
+                        }
+
+                        if (currentSec >= nextFrameAt)
+                        {
+                            nextFrameAt += NTSC_SECONDS_PER_FRAME;
+
+                            _threadSync.Set();
+                        }
+
+                        if (currentSec >= fpsEvalTimer)
+                        {
+                            double diff = currentSec - fpsEvalTimer + 1;
+                            double frames = _cyclesRan / CYCLES_PER_FRAME;
+                            _cyclesRan = 0;
+
+                            //double mips = (double)Gba.Cpu.InstructionsRan / 1000000D;
+                            //Gba.Cpu.InstructionsRan = 0;
+
+                            // Use Math.Floor to truncate to 2 decimal places
+                            _fps = Math.Floor((frames / diff) * 100) / 100;
+                            //Mips = Math.Floor((mips / diff) * 100) / 100;
+                            // UpdateTitle();
+                            //Seconds++;
+
+                            fpsEvalTimer += 1;
+                        }
+                    }
+
                 }
-
-
-                if (_paused)
+                catch (Exception e)
                 {
-                    if (_frameAdvance)
-                    {
-                        _frameAdvance = false;
-                        _threadSync.Set();
-                    }
+                    Console.WriteLine(e);
                 }
-                else
-                {
-                    double currentSec = GetTime();
 
-                    // Reset time if behind schedule
-                    if (currentSec - nextFrameAt >= NTSC_SECONDS_PER_FRAME)
-                    {
-                        double diff = currentSec - nextFrameAt;
-                        Console.WriteLine("Can't keep up! Skipping " + (int)(diff * 1000) + " milliseconds");
-                        nextFrameAt = currentSec;
-                    }
-
-                    if (currentSec >= nextFrameAt)
-                    {
-                        nextFrameAt += NTSC_SECONDS_PER_FRAME;
-
-                        _threadSync.Set();
-                    }
-
-                    if (currentSec >= fpsEvalTimer)
-                    {
-                        double diff = currentSec - fpsEvalTimer + 1;
-                        double frames = _cyclesRan / CYCLES_PER_FRAME;
-                        _cyclesRan = 0;
-
-                        //double mips = (double)Gba.Cpu.InstructionsRan / 1000000D;
-                        //Gba.Cpu.InstructionsRan = 0;
-
-                        // Use Math.Floor to truncate to 2 decimal places
-                        _fps = Math.Floor((frames / diff) * 100) / 100;
-                        //Mips = Math.Floor((mips / diff) * 100) / 100;
-                        // UpdateTitle();
-                        //Seconds++;
-
-                        fpsEvalTimer += 1;
-                    }
-                }
 
 
                 //Draw();
@@ -536,15 +524,15 @@ namespace Fami.Core.Interface
                             _fastForward = true;
                             _videoProvider.SetMessage("Fast Forward");
                             break;
-                        
+
                         case SDL_Keycode.SDLK_F2:
                             _saveStatePending = true;
                             break;
-                        
+
                         case SDL_Keycode.SDLK_F4:
                             _loadStatePending = true;
                             break;
-                        
+
                         case { } keyCode when keyCode >= SDL_Keycode.SDLK_0 && keyCode <= SDL_Keycode.SDLK_9:
                             if (keyCode == SDL_Keycode.SDLK_0)
                             {
@@ -557,7 +545,7 @@ namespace Fami.Core.Interface
                             _videoProvider.SetMessage($"Slot #{_stateSlot}");
                             StateChanged?.Invoke(_stateSlot);
                             break;
-                            
+
                         case SDL_Keycode.SDLK_p:
                             _paused = !_paused;
                             _videoProvider.SetMessage(_paused ? "Paused" : "Resumed");
