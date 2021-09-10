@@ -2,7 +2,7 @@
 
 namespace Fami.Core.CPU
 {
-    public static partial class Cpu6502InstructionSet
+    public static partial class MC6502InstructionSet
     {
         public static OpCodeDelegate[] OpCodes;
 

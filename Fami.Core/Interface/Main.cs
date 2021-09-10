@@ -33,7 +33,7 @@ namespace Fami.Core.Interface
         private bool _fastForward;
         private int _stateSlot = 1;
 
-        private Cpu6502State _nes;
+        private MC6502State _nes;
 
         private uint _frames;
         private bool _hasState;
@@ -146,7 +146,7 @@ namespace Fami.Core.Interface
                 SaveState = SaveState
             };
 
-            _nes = new Cpu6502State();
+            _nes = new MC6502State();
 
             _nes.Init();
 

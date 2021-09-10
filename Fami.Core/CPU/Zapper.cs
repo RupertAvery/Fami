@@ -2,7 +2,7 @@
 
 namespace Fami.Core.CPU
 {
-    public partial class Cpu6502State
+    public partial class MC6502State
     {
         //private int locked_gun_cycle;
         //private int locked_gun_scanline;

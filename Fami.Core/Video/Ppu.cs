@@ -48,7 +48,7 @@ namespace Fami.Core.Video
         private const uint PPUDATA = 0x2007;
         private const uint OAMDMA = 0x4014;
 
-        private readonly Cpu6502State _state;
+        private readonly MC6502State _state;
 
         public uint[] buffer = new uint[256 * 240];
         private StatusRegister ppu_status;
@@ -268,7 +268,7 @@ namespace Fami.Core.Video
 
         public Action ScanLineHandler;
 
-        public Ppu(Cpu6502State state)
+        public Ppu(MC6502State state)
         {
             _state = state;
             for (var i = 0; i < spriteScanline.Length; i++)

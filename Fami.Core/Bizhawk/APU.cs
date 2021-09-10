@@ -26,8 +26,8 @@ namespace BizHawk.Emulation.Cores.Nintendo.NES
 
 		public bool recalculate = false;
 
-		private readonly Cpu6502State nes;
-		public APU(Cpu6502State nes, APU old, bool pal)
+		private readonly MC6502State nes;
+		public APU(MC6502State nes, APU old, bool pal)
 		{
 			this.nes = nes;
 			dmc = new DMCUnit(this, pal);
@@ -576,7 +576,7 @@ namespace BizHawk.Emulation.Cores.Nintendo.NES
 		public sealed class DMCUnit
 		{
 			private readonly APU apu;
-			private readonly Cpu6502State nes;
+			private readonly MC6502State nes;
 			private readonly int[] DMC_RATE;
 			public DMCUnit(APU apu, bool pal)
 			{
@@ -1173,7 +1173,11 @@ namespace BizHawk.Emulation.Cores.Nintendo.NES
 			}
 
 			SyncIRQ();
-			//nes._irq_apu = irq_pending;
+
+            if (irq_pending)
+            {
+                nes.TriggerInterrupt(InterruptTypeEnum.IRQ);
+            }
 
 			// since the units run concurrently, the APU frame sequencer is ran last because
 			// it can change the output values of the pulse/triangle channels

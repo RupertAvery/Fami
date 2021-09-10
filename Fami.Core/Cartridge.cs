@@ -16,7 +16,7 @@ namespace Fami.Core
 
     public class Cartridge
     {
-        public Cpu6502State Cpu { get; }
+        public MC6502State Cpu { get; }
         private const int ROMBANK_SIZE = 16384;
         private const int VROMBANK_SIZE = 8192;
 
@@ -33,7 +33,7 @@ namespace Fami.Core
         public BaseMapper Mapper { get; private set; }
         public MirrorEnum Mirror { get;set;}
 
-        public Cartridge(Cpu6502State cpu)
+        public Cartridge(MC6502State cpu)
         {
             Cpu = cpu;
         }
@@ -43,7 +43,7 @@ namespace Fami.Core
             Mapper.Reset();
         }
 
-        public static Cartridge Load(Stream stream, Cpu6502State cpu)
+        public static Cartridge Load(Stream stream, MC6502State cpu)
         {
             var r = new BinaryReader(stream);
             var header = r.ReadBytes(4);
@@ -77,7 +77,7 @@ namespace Fami.Core
             return h;
         }
 
-        public static Cartridge Load(string path, Cpu6502State cpu)
+        public static Cartridge Load(string path, MC6502State cpu)
         {
             using (var f = new FileStream(path, FileMode.Open, FileAccess.Read))
             {
