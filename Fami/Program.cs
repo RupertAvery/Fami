@@ -41,11 +41,13 @@ namespace Fami
                     //rom = @"D:\roms\NES\Willow.zip";
                     //rom = @"D:\roms\NES\Wizards & Warriors 1.zip";
                     //rom = @"D:\roms\NES\nes-test-roms\branch_timing_tests\1.Branch_Basics.nes";
+                    
+                    main.Run();
+
                     if (args.Length > 0)
                     {
                         main.Load(args[0]);
                     }
-                    main.Run();
                 }
 
             }
