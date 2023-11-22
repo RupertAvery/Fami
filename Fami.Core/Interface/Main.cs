@@ -368,12 +368,7 @@ namespace Fami.Core.Interface
 
             _videoProvider.SetMessage($"Loaded {_romFilename}");
 
-            if (_emulationThread == null)
-            {
-                _emulationThread = new Thread(EmulationThreadHandler);
-                _emulationThread.Name = "Emulation Core";
-                _emulationThread.Start();
-            }
+
         }
 
 
@@ -384,6 +379,14 @@ namespace Fami.Core.Interface
 
             var nextFrameAt = GetTime();
             double fpsEvalTimer = 0;
+
+            if (_emulationThread == null)
+            {
+                _emulationThread = new Thread(EmulationThreadHandler);
+                _emulationThread.Name = "Emulation Core";
+                _emulationThread.Start();
+            }
+
 
             void ResetTimers()
             {
