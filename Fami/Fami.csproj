@@ -2,15 +2,15 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0-windows</TargetFramework>
-    <PublishSingleFile>true</PublishSingleFile>
+    <TargetFramework>net7.0-windows</TargetFramework>
+    <!--<PublishSingleFile>true</PublishSingleFile>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>true</PublishTrimmed>
     <SuppressTrimAnalysisWarnings>false</SuppressTrimAnalysisWarnings>
-    <PublishReadyToRun>false</PublishReadyToRun>
+    <PublishReadyToRun>false</PublishReadyToRun>-->
     <ApplicationIcon>famicon.ico</ApplicationIcon>
   </PropertyGroup>
 

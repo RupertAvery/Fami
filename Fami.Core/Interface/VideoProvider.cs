@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.CompilerServices;
 using static SDL2.SDL_ttf;
 using static SDL2.SDL;
 
@@ -60,7 +61,7 @@ namespace Fami.Core.Interface
         {
             //SDL_SetWindowPosition(Window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
             _renderer = SDL_CreateRenderer(Window, -1,
-                SDL_RendererFlags.SDL_RENDERER_ACCELERATED | SDL_RendererFlags.SDL_RENDERER_PRESENTVSYNC);
+                SDL_RendererFlags.SDL_RENDERER_ACCELERATED);
 
             _texture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_ABGR8888,
                 (int)SDL_TextureAccess.SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
@@ -116,6 +117,7 @@ namespace Fami.Core.Interface
             SDL_UpdateWindowSurface(Window);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe void Render(uint[] buffer)
         {
             for (var y = 0; y < HEIGHT; y++)
@@ -126,7 +128,7 @@ namespace Fami.Core.Interface
                     //var r = p >> 16 & 0xFF;
                     //var g = p >> 8 & 0xFF;
                     //var b = p & 0xFF;
-                    //var q = DisplayBuf[x + y * WIDTH];
+                    //var q = _displayBuf[x + y * WIDTH];
                     //var i = q >> 16 & 0xFF;
                     //var j = q >> 8 & 0xFF;
                     //var k = q & 0xFF;
@@ -142,6 +144,49 @@ namespace Fami.Core.Interface
                     _displayBuf[x + y * WIDTH] = p;
                 }
             }
+
+            //for (var y = 0; y < HEIGHT; y++)
+            //{
+            //    for (var x = 0; x < WIDTH; x++)
+            //    {
+            //        var p = buffer[x + y * WIDTH];
+            //        var r = p >> 16 & 0xFF;
+            //        var g = p >> 8 & 0xFF;
+            //        var b = p & 0xFF;
+
+            //        //var q = _displayBuf[x + y * WIDTH];
+
+            //        //var i = q >> 16 & 0xFF;
+            //        //var j = q >> 8 & 0xFF;
+            //        //var k = q & 0xFF;
+
+            //        r = (uint)(255 - r);
+            //        g = (uint)(255 - g);
+            //        b = (uint)(255 - b);
+
+            //        p = 0xFF000000 | (r << 16) | (g << 8) | b;
+
+            //        _displayBuf[x + y * WIDTH] = p;
+            //    }
+            //}
+
+            //for (var y = 1; y < HEIGHT - 1; y++)
+            //{
+            //    for (var x = 1; x < WIDTH - 1; x++)
+            //    {
+            //        var p1 = buffer[(x - 1) + (y - 1) * WIDTH];
+            //        var p2 = buffer[(x) + (y - 1)  * WIDTH];
+            //        var p3 = buffer[(x + 1) + (y - 1)  * WIDTH];
+            //        var p4 = buffer[(x - 1) + (y)  * WIDTH];
+            //        var p5 = buffer[(x) + (y)  * WIDTH];
+            //        var p6 = buffer[(x + 1) + (y)  * WIDTH];
+            //        var p7 = buffer[(x - 1) + (y + 1)  * WIDTH];
+            //        var p8 = buffer[(x) + (y + 1)  * WIDTH];
+            //        var p9 = buffer[(x + 1) + (y + 1) * WIDTH];
+
+            //        _displayBuf[x + y * WIDTH] = (uint)(p1 * 0.1) ;
+            //    }
+            //}
 
             //CopyPixels(Gba.Ppu.Renderer.ScreenFront, DisplayBuf, WIDTH * HEIGHT, ColorCorrection);
             fixed (void* ptr = _displayBuf)
@@ -191,7 +236,7 @@ namespace Fami.Core.Interface
             }
 
             SDL_RenderPresent(_renderer);
-            SDL_UpdateWindowSurface(Window);
+            //SDL_UpdateWindowSurface(Window);
         }
 
         private string _message;
@@ -217,8 +262,8 @@ namespace Fami.Core.Interface
                 _message = message;
                 _messageTimeout = 200;
 
-                SDL_Color foregroundColor = new SDL_Color() {a = 0xFF, r = 0xFF, g = 0xFF, b = 0xFF};
-                SDL_Color backgroundColor = new SDL_Color() {a = 0x00, r = 0x00, g = 0x00, b = 0x00};
+                SDL_Color foregroundColor = new SDL_Color() { a = 0xFF, r = 0xFF, g = 0xFF, b = 0xFF };
+                SDL_Color backgroundColor = new SDL_Color() { a = 0x00, r = 0x00, g = 0x00, b = 0x00 };
 
                 textSurface = TTF_RenderText_Blended(_font, _message, foregroundColor);
                 textTexture = SDL_CreateTextureFromSurface(_renderer, textSurface);

@@ -331,8 +331,15 @@ namespace Fami.Core.Video
                         // buffer is updated. Writing to the PPU is unwise during rendering
                         // as the PPU will maintam the vram address automatically whilst
                         // rendering the scanline position.
+                        var oldNameY = vram_addr.NametableY;
+
                         tram_addr.Register = (tram_addr.Register & 0xFF00) | data;
                         vram_addr.Register = tram_addr.Register;
+                        //if (oldNameY == (vram_addr.NametableY ^ 1))
+                        if (oldNameY == 0 && vram_addr.NametableY == 1 || oldNameY == 1 && vram_addr.NametableY == 0)
+                        {
+                            ScanLineHandler?.Invoke();
+                        }
                     }
                     address_latch ^= 1;
                     break;

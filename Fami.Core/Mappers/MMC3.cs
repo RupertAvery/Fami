@@ -36,11 +36,12 @@ namespace Fami.Core.Mappers
             else
             {
                 irq_counter--;
+                if (enable_interrupts && irq_counter == 0)
+                {
+                    _cartridge.Cpu.TriggerInterrupt(InterruptTypeEnum.IRQ);
+                }
             }
-            if (enable_interrupts && irq_counter == 0)
-            {
-                _cartridge.Cpu.TriggerInterrupt(InterruptTypeEnum.IRQ);
-            }
+
         }
 
         public override (uint value, bool handled) CpuMapRead(uint address)

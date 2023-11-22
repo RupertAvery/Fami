@@ -12,7 +12,7 @@ namespace Fami.Core.Interface
 {
     public class Main : IDisposable
     {
-        public const int CYCLES_PER_FRAME = 89341;
+        public const int CYCLES_PER_FRAME = 89342;
         private const double NTSC_SECONDS_PER_FRAME = 1 / 60D;
         private const double PAL_SECONDS_PER_FRAME = 1 / 50D;
         private double _fps;
@@ -243,14 +243,14 @@ namespace Fami.Core.Interface
 
         public void EmulationThreadHandler()
         {
-            void Render()
-            {
-                _videoProvider.Render(_nes.Ppu.buffer);
+            //void Render()
+            //{
+            //    _videoProvider.Render(_nes.Ppu.buffer);
 
-                _nes.GetSamplesSync(out var lsamples, out int lnsamp);
+            //    _nes.GetSamplesSync(out var lsamples, out int lnsamp);
 
-                _audioProvider.AudioReady(lsamples);
-            }
+            //    _audioProvider.AudioReady(lsamples);
+            //}
 
             while (_running)
             {
@@ -269,7 +269,7 @@ namespace Fami.Core.Interface
                     while (_fastForward)
                     {
                         RunFrame();
-                        Render();
+                        //Render();
                     }
 
                     _playback.PerFrame(ref _rewind);
@@ -286,7 +286,16 @@ namespace Fami.Core.Interface
                         _loadStatePending = false;
                     }
 
-                    Render();
+                    //Render();
+                    //if (_frames % 2 == 0)
+                    //{
+                    _videoProvider.Render(_nes.Ppu.buffer);
+                    //}
+
+
+                    _nes.GetSamplesSync(out var lsamples, out int lnsamp);
+
+                    _audioProvider.AudioReady(lsamples);
                 }
                 catch (Exception e)
                 {
@@ -300,6 +309,7 @@ namespace Fami.Core.Interface
         {
             _cyclesRan += CYCLES_PER_FRAME;
             _cyclesLeft += CYCLES_PER_FRAME;
+            _cyclesLeft -= (int)(_frames % 2);
 
             while (_cyclesLeft > 0)
             {
