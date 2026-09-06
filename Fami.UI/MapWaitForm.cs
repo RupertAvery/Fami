@@ -1,8 +1,9 @@
-﻿using System;
-using System.Windows.Forms;
-using Fami.Core.Interface.Input;
+﻿using Fami.Core.Interface.Input;
 using SDL2;
+using System;
+using System.ComponentModel;
 using System.Threading;
+using System.Windows.Forms;
 
 namespace Fami.UI
 {
@@ -12,6 +13,7 @@ namespace Fami.UI
         private readonly ControllerButtonEnum _button;
         private System.Threading.Timer timer;
         private int countDown;
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool Success { get; set; }
 
         public MapWaitForm(InputProvider inputProvider, ControllerButtonEnum button)

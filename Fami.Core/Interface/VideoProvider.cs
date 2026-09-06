@@ -118,7 +118,7 @@ namespace Fami.Core.Interface
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe void Render(uint[] buffer)
+        public unsafe void Render(Span<uint> buffer)
         {
             for (var y = 0; y < HEIGHT; y++)
             {

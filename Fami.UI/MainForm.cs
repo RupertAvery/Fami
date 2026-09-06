@@ -15,13 +15,22 @@ namespace Fami.UI
     public partial class MainForm : Form, IMainInterface
     {
         private readonly Main _main;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Action OnHostResize { get; set; }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Func<string, bool> LoadRom { get; set; }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Action<int> ChangeSlot { get; set; }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Action LoadState { get; set; }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Action SaveState { get; set; }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Action<int,int> ResizeWindow { get; set; }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Action<ControllerButtonEnum> SetMapping { get; set; }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Configuration Configuration { get;set;}
 
         public MainForm(Main main)
